@@ -3,6 +3,7 @@ mod commands;
 mod companion;
 #[cfg(target_os = "macos")]
 mod instance_lock;
+mod local_models;
 #[cfg(desktop)]
 mod tray;
 mod update_service;
@@ -304,6 +305,21 @@ pub fn run() {
             companion::get_companion_enabled,
             companion::set_companion_enabled,
             companion::open_companion_settings,
+            local_models::local_workbuddy_models,
+            local_models::local_workbuddy_import,
+            local_models::local_workbuddy_update_connection,
+            local_models::local_workbuddy_remove,
+            local_models::local_workbuddy_remove_external,
+            local_models::local_workbuddy_disable,
+            local_models::local_workbuddy_enable,
+            local_models::local_workbuddy_remove_all,
+            local_models::local_dsh_models,
+            local_models::local_dsh_import,
+            local_models::local_dsh_remove,
+            local_models::local_dsh_remove_external,
+            local_models::local_dsh_remove_all,
+            local_models::local_dsh_disable,
+            local_models::local_dsh_enable,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

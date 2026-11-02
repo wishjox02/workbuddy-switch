@@ -2,13 +2,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import {
   CircleAlert,
+  Boxes,
   ArrowDownToLine,
   ArrowUpFromLine,
   Check,
   ChevronLeft,
   ChevronRight,
   Gauge,
-  ListTree,
   Loader2,
   MessagesSquare,
   RefreshCw,
@@ -35,7 +35,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { DemoAction } from "@/components/demo-action";
-import { CodeBuddyCnIdeMark, CodeBuddyMark, WorkBuddyAiMark, WorkBuddyMark } from "@/components/product-marks";
+import { CustomModelUsageTab } from "@/components/custom-model-usage-tab";
+import { WorkBuddyAiMark, WorkBuddyMark } from "@/components/product-marks";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,7 @@ import type {
 } from "@/lib/types";
 
 type SourceKey = TokenStatsSource["source"];
+type ActiveKey = SourceKey | "custom-models";
 type RangeKey = "30d" | "today" | "7d" | "month";
 type OverviewRangeKey = "today" | "7d" | "30d" | "total";
 type DistributionKey = "projects" | "models";
@@ -76,25 +78,20 @@ const RANKING_LIMIT = 10;
 const REQUEST_PAGE_SIZE = 50;
 
 function isSourceKey(value: unknown): value is SourceKey {
-  return (
-    value === "workbuddy" ||
-    value === "workbuddy-ai" ||
-    value === "codebuddy-cli" ||
-    value === "codebuddy-ide"
-  );
+  return value === "workbuddy" || value === "workbuddy-ai";
 }
 
-function readPreferredTokenSource(): SourceKey {
+function readPreferredTokenSource(): ActiveKey {
   if (typeof window === "undefined") return "workbuddy";
   try {
     const stored = window.localStorage.getItem(TOKEN_SOURCE_STORAGE_KEY);
-    return isSourceKey(stored) ? stored : "workbuddy";
+    return stored === "custom-models" || isSourceKey(stored) ? stored : "workbuddy";
   } catch {
     return "workbuddy";
   }
 }
 
-function persistPreferredTokenSource(source: SourceKey): void {
+function persistPreferredTokenSource(source: ActiveKey): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(TOKEN_SOURCE_STORAGE_KEY, source);
@@ -1547,7 +1544,7 @@ function TokenStatsLoadingSkeleton() {
 
 export default function TokenStatsPage() {
   const [stats, setStats] = useState<TokenStatistics | null>(null);
-  const [active, setActive] = useState<SourceKey>(readPreferredTokenSource);
+  const [active, setActive] = useState<ActiveKey>(readPreferredTokenSource);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
@@ -1560,7 +1557,13 @@ export default function TokenStatsPage() {
     api
       .getTokenStatistics()
       .then((result) => {
-        if (!disposed) setStats(result);
+        if (!disposed) {
+          // 产品界面只展示 WorkBuddy 来源，旧版本产生的插件日志仍由后端兼容读取。
+          setStats({
+            ...result,
+            sources: result.sources.filter((item) => item.source === "workbuddy" || item.source === "workbuddy-ai"),
+          });
+        }
       })
       .catch((cause) => {
         if (!disposed) setError(api.asError(cause));
@@ -1574,6 +1577,7 @@ export default function TokenStatsPage() {
   }, [reload]);
 
   useEffect(() => {
+    if (active === "custom-models") { persistPreferredTokenSource(active); return; }
     if (!stats || stats.sources.length === 0) return;
     const available = stats.sources.map((item) => item.source);
     const next = available.includes(active)
@@ -1586,13 +1590,13 @@ export default function TokenStatsPage() {
     persistPreferredTokenSource(next);
   }, [active, stats]);
 
-  const source = stats?.sources.find((item) => item.source === active);
+  const source = active === "custom-models" ? undefined : stats?.sources.find((item) => item.source === active);
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] min-w-0 px-4 py-6 sm:px-8 sm:py-9">
+    <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
       <header className="mb-6 flex min-w-0 flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          {loading && !stats ? (
+          {loading && !stats && active !== "custom-models" ? (
             <div aria-hidden="true">
               <Skeleton className="h-8 w-40" />
               <Skeleton className="mt-2 h-5 w-64 max-w-full" />
@@ -1601,32 +1605,21 @@ export default function TokenStatsPage() {
             <>
               <h1 className="text-[28px] font-semibold tracking-tight">Token 统计</h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                当前数据更新于 {stats ? formatDateTime(stats.generatedAt) : "—"}
+                {active === "custom-models" ? "Sub2API 模型用量" : `当前数据更新于 ${stats ? formatDateTime(stats.generatedAt) : "—"}`}
               </p>
             </>
           )}
         </div>
         <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
-          {active === "codebuddy-cli" && (
-            <Button
-              className="shrink-0"
-              variant="outline"
-              size="sm"
-              onClick={() => setDetailOpen(true)}
-            >
-              <ListTree />
-              查看请求明细
-            </Button>
-          )}
           <DemoAction>
             <Button
               className="shrink-0"
               variant="outline"
               size="sm"
               onClick={() => setReload((value) => value + 1)}
-              disabled={loading}
+              disabled={loading && active !== "custom-models"}
             >
-              {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              {loading && active !== "custom-models" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
               刷新统计
             </Button>
           </DemoAction>
@@ -1634,13 +1627,11 @@ export default function TokenStatsPage() {
       </header>
 
       {/* 数据源 Tab 独占一行：数据源变多时不与右上角操作挤在同一排 */}
-      {loading && !stats ? (
-        <Skeleton className="mb-8 h-9 w-full max-w-md rounded-lg" aria-hidden="true" />
-      ) : (
-        <Tabs
+      <Tabs
           className="mb-8 min-w-0 gap-0"
           value={active}
           onValueChange={(value) => {
+            if (value === "custom-models") { setActive(value); return; }
             if (!isSourceKey(value)) return;
             if (stats && !stats.sources.some((item) => item.source === value)) return;
             setActive(value);
@@ -1663,27 +1654,11 @@ export default function TokenStatsPage() {
               <WorkBuddyAiMark size={16} />
               WorkBuddy 国际版
             </TabsTrigger>
-            <TabsTrigger
-              className="max-w-full gap-2 whitespace-normal"
-              value="codebuddy-cli"
-              disabled={Boolean(stats && !stats.sources.some((item) => item.source === "codebuddy-cli"))}
-            >
-              <CodeBuddyMark size={16} />
-              CodeBuddy CLI
-            </TabsTrigger>
-            <TabsTrigger
-              className="max-w-full gap-2 whitespace-normal"
-              value="codebuddy-ide"
-              disabled={Boolean(stats && !stats.sources.some((item) => item.source === "codebuddy-ide"))}
-            >
-              <CodeBuddyCnIdeMark size={16} />
-              CodeBuddy IDE / VS Code
-            </TabsTrigger>
+            <TabsTrigger className="max-w-full gap-2 whitespace-normal" value="custom-models"><Boxes className="size-4" />自定义模型</TabsTrigger>
           </TabsList>
         </Tabs>
-      )}
 
-      {error && (
+      {error && active !== "custom-models" && (
         <Alert variant="destructive" className="mb-5">
           <CircleAlert />
           <AlertTitle>统计加载失败</AlertTitle>
@@ -1696,7 +1671,7 @@ export default function TokenStatsPage() {
         </Alert>
       )}
 
-      {loading && !stats ? <TokenStatsLoadingSkeleton /> : source ? (
+      {active === "custom-models" ? <CustomModelUsageTab reload={reload} /> : loading && !stats ? <TokenStatsLoadingSkeleton /> : source ? (
         <Dashboard source={source} />
       ) : (
         !error && (

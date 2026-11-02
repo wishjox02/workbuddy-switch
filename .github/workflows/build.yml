@@ -158,9 +158,11 @@ jobs:
 
       # 前端构建产物（CLI 二进制 rust-embed 嵌入 + Tauri App 使用）
       - name: Build frontend
+        env:
+          AGENT_COMPANION_TARGET: ${{ matrix.target }}
         run: |
           npm install
-          npm run build
+          npm run build:desktop
 
       # CLI 二进制
       - name: Build server binary
@@ -195,7 +197,7 @@ jobs:
       # 仓库变量 PUBLISH_APP=false 时整段跳过：纯 npm/CLI 改动可只发 npm 不发桌面 App；
       # 恢复为 true 后重跑本工作流即可幂等补发（与 PUBLISH_NPM 对称）。
       - name: Build desktop app
-        if: vars.PUBLISH_APP != 'false'
+        if: vars.PUBLISH_APP != 'false' || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -209,7 +211,12 @@ jobs:
           BUNDLE_ROOT="target/${{ matrix.target }}/release/bundle"
           # cargo cache 会保留旧 NSIS/DMG/AppImage；不清理就会把 0.1.17 一类产物带进 Release。
           rm -rf "$BUNDLE_ROOT"
-          npm run tauri -- build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} \
+              --no-sign --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          else
+            npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          fi
           echo "bundle after build:"
           find "$BUNDLE_ROOT" -type f | sort || true
           if [ "${{ matrix.bundles }}" = "nsis" ]; then
@@ -232,7 +239,7 @@ jobs:
           fi
 
       - name: Generate updater manifest
-        if: matrix.update_arch != '' && vars.PUBLISH_APP != 'false'
+        if: matrix.update_arch != '' && vars.PUBLISH_APP != 'false' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           UPDATE_OS: ${{ matrix.update_os }}
@@ -307,7 +314,7 @@ jobs:
           cp "$MANIFEST" dist-bin/
 
       - uses: actions/upload-artifact@v4
-        if: vars.PUBLISH_APP != 'false'
+        if: vars.PUBLISH_APP != 'false' || github.event_name == 'workflow_dispatch'
         with:
           name: ${{ matrix.name }}
           path: dist-bin/

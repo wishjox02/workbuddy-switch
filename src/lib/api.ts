@@ -273,8 +273,9 @@ export function getStatus(variant?: WbVariant): Promise<AppStatus> {
 }
 
 /** 返回全部档位的账号，由调用方按 `variant` 过滤。 */
-export function getAccounts(): Promise<{ accounts: AccountMeta[] }> {
-  return call("get_accounts");
+export async function getAccounts(): Promise<{ accounts: AccountMeta[] }> {
+  const result = await call<{ accounts?: AccountMeta[] }>("get_accounts");
+  return { accounts: Array.isArray(result?.accounts) ? result.accounts : [] };
 }
 
 export function getCodebuddyCliStatus(): Promise<CodeBuddyCliStatus> {

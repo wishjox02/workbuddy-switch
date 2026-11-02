@@ -1,12 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "workbuddy-switch",
+  "mainBinaryName": "小玉米",
   "version": "0.1.62",
   "identifier": "com.wbswitch.app",
   "build": {
     "beforeDevCommand": "npm run dev:desktop",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build:desktop",
+    "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -14,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "workbuddy-switch · WorkBuddy 账号切换",
+        "title": "小玉米 · 账号切换",
         "width": 1000,
         "height": 720,
         "minWidth": 720,
@@ -44,7 +45,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/agent-studio-runtime"]
+    "externalBin": [
+      "binaries/agent-studio-runtime"
+    ]
   },
   "plugins": {
     "updater": {

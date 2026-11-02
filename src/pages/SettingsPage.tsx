@@ -33,8 +33,7 @@ import { TimePicker } from "@/components/ui/time-picker";
 import { displayName } from "@/lib/account-display";
 import * as api from "@/lib/api";
 import { canPersistErrorLog } from "@/lib/error-report";
-import { setSessionsNavEnabled, useSessionsNavEnabled } from "@/lib/nav-prefs";
-import { setDefaultArchiveSyncEnabled, useDefaultArchiveSyncEnabled } from "@/lib/sync-prefs";
+import { adminBackendUrl, saveAdminBackendUrl } from "@/lib/admin-backend";
 import { getThemePreference, setThemePreference, type ThemePreference } from "@/lib/theme";
 import { SUPPORTED_TOOLS, setToolEnabled, useSupportedTools, type ToolId } from "@/lib/supported-tools";
 import type {
@@ -87,6 +86,48 @@ function SettingsGroup({ id, title, children }: SettingsGroupProps) {
       </div>
       <Card className="min-w-0 gap-0 overflow-hidden rounded-xl py-0 shadow-none">{children}</Card>
     </section>
+  );
+}
+
+function AdminBackendCard() {
+  const [url, setUrl] = useState(() => adminBackendUrl());
+  const [saving, setSaving] = useState(false);
+
+  function save() {
+    const value = url.trim();
+    if (!value) {
+      toast.error("请输入后台地址");
+      return;
+    }
+    try {
+      const parsed = new URL(value);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") throw new Error("协议不支持");
+    } catch {
+      toast.error("后台地址必须是 http 或 https URL");
+      return;
+    }
+    setSaving(true);
+    const saved = saveAdminBackendUrl(value);
+    setUrl(saved);
+    setSaving(false);
+    toast.success("后台地址已保存");
+  }
+
+  return (
+    <SettingsGroup id="settings-admin-backend" title="后台服务">
+      <SettingsFieldRow
+        label="Sub2API / 充值后台地址"
+        description="用于登录、模型、积分和充值请求。默认接入线上后台 https://woai.info/admin/api，需要临时切换时可填写自建地址。"
+        htmlFor="admin-backend-url"
+      >
+        <div className="flex w-full min-w-0 gap-2 sm:w-auto">
+          <Input id="admin-backend-url" value={url} onChange={(event) => setUrl(event.target.value)} className="w-full sm:w-[360px]" placeholder="https://woai.info/admin/api" />
+          <Button type="button" size="sm" variant="outline" onClick={save} disabled={saving}>
+            {saving ? <Loader2 className="animate-spin" /> : <Save />}保存
+          </Button>
+        </div>
+      </SettingsFieldRow>
+    </SettingsGroup>
   );
 }
 
@@ -1805,8 +1846,6 @@ function ErrorLogCard() {
 
 function AppearanceCard() {
   const [theme, setTheme] = useState<ThemePreference>(getThemePreference);
-  const sessionsNavEnabled = useSessionsNavEnabled();
-  const defaultArchiveSyncEnabled = useDefaultArchiveSyncEnabled();
 
   function onThemeChange(value: string) {
     if (value !== "system" && value !== "light" && value !== "dark") return;
@@ -1821,6 +1860,7 @@ function AppearanceCard() {
     >
       <CardContent className="space-y-0 p-0">
         <SettingsFieldRow
+          className="border-b-0"
           label="主题"
           description="选择浅色、深色，或跟随系统外观自动切换"
           htmlFor="appearance-theme"
@@ -1835,31 +1875,6 @@ function AppearanceCard() {
               <SelectItem value="dark">深色</SelectItem>
             </SelectContent>
           </Select>
-        </SettingsFieldRow>
-        <SettingsFieldRow
-          label="显示关联会话菜单"
-          description="关闭后左侧导航不再显示「关联会话」入口，会话数据与关联关系不受影响"
-          htmlFor="appearance-sessions-nav"
-        >
-          <Switch
-            id="appearance-sessions-nav"
-            checked={sessionsNavEnabled}
-            onCheckedChange={(on) => setSessionsNavEnabled(on)}
-            aria-label="显示关联会话菜单"
-          />
-        </SettingsFieldRow>
-        <SettingsFieldRow
-          className="border-b-0"
-          label="切换账号时默认勾选归档同步"
-          description="开启后，切换账号时会预先勾选可仅同步归档状态的关联会话，保留正文。你仍可取消勾选，确认切换后才执行。正文快进和覆盖沿用原有规则。"
-          htmlFor="sync-default-archive"
-        >
-          <Switch
-            id="sync-default-archive"
-            checked={defaultArchiveSyncEnabled}
-            onCheckedChange={(on) => setDefaultArchiveSyncEnabled(on)}
-            aria-label="切换账号时默认勾选归档同步"
-          />
         </SettingsFieldRow>
       </CardContent>
     </SettingsGroup>
@@ -1915,7 +1930,7 @@ function SupportedToolsCard() {
   );
 }
 
-/** 限额监听：总开关 + hook 接入状态（CLI / WorkBuddy 实时上报，IDE 仍走日志扫描）。 */
+/** 限额监听：只服务于 WorkBuddy 客户端。 */
 function RateLimitCard() {
   const [config, setConfig] = useState<RateLimitConfig | null>(null);
   const [status, setStatus] = useState<RateLimitHookStatus | null>(null);
@@ -1955,31 +1970,6 @@ function RateLimitCard() {
   }
 
   /**
-   * 「扫描 CodeBuddy IDE 日志」独立开关：只关两个 IDE 的日志来源（IDE 的 429 不触发任何
-   * 事件，日志是它唯一的数据源），CLI / WorkBuddy 的 hook 通路不受影响。
-   */
-  async function onToggleIdeLogs(scanIdeLogs: boolean) {
-    if (!config || busy) return;
-    const previous = config;
-    setConfig({ ...config, scanIdeLogs });
-    setBusy(true);
-    try {
-      // 与总开关一样整份提交：只带 scanIdeLogs 会把 enabled / hookOptOut 冲成默认值。
-      setConfig(await api.saveRateLimitConfig({ ...config, scanIdeLogs }));
-      toast.success(
-        scanIdeLogs
-          ? "已开启 IDE 日志扫描"
-          : "已关闭 IDE 日志扫描：两个 CodeBuddy IDE 的限额不再显示",
-      );
-    } catch (e) {
-      setConfig(previous);
-      toast.error("限额监听设置保存失败", { description: api.asError(e) });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /**
    * 回读限额配置：装 / 卸 hook 无论成败都会写「接入 / 卸载」意图（部分目标失败也算），
    * 本地标记不能只靠乐观更新，否则随后拨总开关会把过期值写回磁盘。
    */
@@ -1998,7 +1988,7 @@ function RateLimitCard() {
     try {
       setStatus(await api.installRateLimitHook());
       toast.success("已接入限额监听", {
-        description: "CodeBuddy CLI / WorkBuddy 的 429 会实时上报（原配置已备份，可随时卸载还原）",
+        description: "WorkBuddy 的 429 会实时上报（原配置已备份，可随时卸载还原）",
       });
     } catch (e) {
       toast.error("接入 hook 失败", { description: api.asError(e) });
@@ -2026,18 +2016,13 @@ function RateLimitCard() {
 
   const existingTargets = status?.targets.filter((target) => target.exists) ?? [];
   const installedCount = existingTargets.filter((target) => target.installed).length;
-  // IDE 的限额只有日志一条来源：扫描开关关闭时文案不能再说「仍按日志扫描」。
-  const ideNote =
-    config?.scanIdeLogs === false
-      ? "CodeBuddy IDE 的日志扫描已关闭"
-      : "CodeBuddy IDE 无事件，仍按日志扫描";
   const hookDescription = status
     ? existingTargets.length === 0
-      ? `未检测到 CodeBuddy CLI / WorkBuddy 客户端：没有可接入的配置（${ideNote}）`
+      ? "未检测到 WorkBuddy 客户端：没有可接入的配置"
       : status.installed
-        ? `${installedCount} / ${existingTargets.length} 个已安装客户端已接入：429 当轮实时上报（秒级）；${ideNote}`
+        ? `${installedCount} / ${existingTargets.length} 个已安装 WorkBuddy 客户端已接入：429 当轮实时上报（秒级）`
         : config?.hookOptOut
-          ? "已卸载：不会再自动接入，限额改由日志扫描发现；点「接入 hook」可恢复实时上报"
+          ? "已卸载：不会再自动接入；点「接入 hook」可恢复实时上报"
           : "未接入：限额仅靠定期扫描日志发现（最多滞后数分钟）"
     : "加载中…";
 
@@ -2056,21 +2041,6 @@ function RateLimitCard() {
             disabled={busy || !config}
             onCheckedChange={(v) => void onToggle(v)}
             aria-label="启用限额监听"
-          />
-        </SettingsFieldRow>
-
-        <SettingsFieldRow
-          label="扫描 CodeBuddy IDE 日志"
-          description="IDE 的限额只有日志一条来源，关掉后不再显示；CodeBuddy CLI / WorkBuddy 的实时上报不受影响"
-          htmlFor="rl-ide-scan"
-          operational
-        >
-          <Switch
-            id="rl-ide-scan"
-            checked={config?.scanIdeLogs ?? true}
-            disabled={busy || !config}
-            onCheckedChange={(v) => void onToggleIdeLogs(v)}
-            aria-label="扫描 CodeBuddy IDE 日志"
           />
         </SettingsFieldRow>
 
@@ -2109,7 +2079,7 @@ function RateLimitCard() {
 /** 设置页：演示模式不渲染自动签到；Agent Companion 只在桌面正式版显示。 */
 export default function SettingsPage() {
   return (
-    <div className="mx-auto min-w-0 w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
+    <div className="wb-page mx-auto min-w-0 w-full max-w-[1180px] px-4 py-7 sm:px-8 sm:py-10">
       <header className="mb-10 sm:mb-12">
         <h1 className="text-2xl font-semibold tracking-tight">设置</h1>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">
@@ -2118,17 +2088,19 @@ export default function SettingsPage() {
       </header>
 
       <div className="min-w-0 space-y-12">
+        <AdminBackendCard />
         <AppearanceCard />
-        <SupportedToolsCard />
         <PermissionCheckCard />
         {api.isDemoMode() ? null : <AutoCheckinCard />}
-        <AutoRotateCard />
         <RateLimitCard />
-        {api.isDesktop() && !api.isDemoMode() ? <CompanionCard /> : null}
         {api.isDesktop() || api.isDemoMode() ? <StartupCard /> : null}
         <NotificationHistoryCard />
         <ErrorLogCard />
         {api.isWebui() && !api.isDemoMode() ? null : <UpdateCard />}
+        {/* 保留旧配置组件的代码兼容旧数据，但不再向 WorkBuddy 用户呈现。 */}
+        {false && <SupportedToolsCard />}
+        {false && <AutoRotateCard />}
+        {false && <CompanionCard />}
       </div>
     </div>
   );

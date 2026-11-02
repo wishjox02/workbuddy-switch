@@ -32,6 +32,7 @@ tauri-plugin-updater = "2"
 wb-switch-core = { path = "../crates/wb-switch-core" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+serde_yaml = "0.9"
 uuid = { version = "1", features = ["v4"] }
 tokio = { version = "1", features = ["rt", "sync", "time", "macros"] }
 tauri-plugin-notification = "2"

@@ -19,7 +19,7 @@ export function getThemePreference(): ThemePreference {
     // 存储不可用时仍可跟随系统主题。
   }
 
-  return "system";
+  return "light";
 }
 
 export function applyTheme(preference: ThemePreference) {
