@@ -266,6 +266,16 @@ jobs:
                 kill "$APP_PID" || true
               else
                 wait "$APP_PID" || echo "macOS app exited with status $?"
+                sleep 5
+                find "$HOME/Library/Logs/DiagnosticReports" /Library/Logs/DiagnosticReports \
+                  -type f -mmin -3 \( -name '*.ips' -o -name '*.crash' \) -print \
+                  -exec cat {} \; 2>/dev/null || true
+                lldb --batch -o run -o 'thread backtrace all' -- "$MAIN" > "$RUNNER_TEMP/wb-switch-lldb.log" 2>&1 &
+                LLDB_PID=$!
+                sleep 25
+                kill "$LLDB_PID" 2>/dev/null || true
+                wait "$LLDB_PID" 2>/dev/null || true
+                cat "$RUNNER_TEMP/wb-switch-lldb.log"
               fi
               cat "$RUNNER_TEMP/wb-switch-launch.log"
             fi
