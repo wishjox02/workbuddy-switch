@@ -10,6 +10,21 @@ export interface ModelDefinition {
   remoteAvailable?: boolean;
 }
 
+export function isOurModel(model: ModelDefinition): boolean {
+  return model.managed === true || (model.remoteAvailable === true && !model.localInstalled);
+}
+
+export function groupModelCatalog(models: ModelDefinition[]): Array<[string, ModelDefinition[]]> {
+  const groups = new Map<string, ModelDefinition[]>();
+  for (const model of models) {
+    const group = isOurModel(model) ? "我们的模型" : model.provider.toLowerCase() === "openai" ? "OPENAI" : model.provider;
+    groups.set(group, [...(groups.get(group) ?? []), model]);
+  }
+  return [...groups.entries()].sort(([left], [right]) =>
+    left === "我们的模型" ? (right === left ? 0 : -1) : right === "我们的模型" ? 1 : left.localeCompare(right),
+  );
+}
+
 export function mergeModelCatalog(remote: ModelDefinition[], local: ModelDefinition[], preserveProviders = false): ModelDefinition[] {
   const result: ModelDefinition[] = remote.map((model) => ({ ...model, remoteAvailable: true }));
   for (const model of local) {

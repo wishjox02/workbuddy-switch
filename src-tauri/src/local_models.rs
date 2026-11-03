@@ -241,11 +241,13 @@ fn workbuddy_update_connection(
 ) -> Result<Vec<Value>, String> {
     let base_url = base_url.trim().trim_end_matches('/');
     let api_key = api_key.trim();
-    if user_id <= 0 || !real_template(&json!({
-        "url": base_url,
-        "apiKey": api_key,
-        "wbSwitchManaged": true,
-    })) {
+    if user_id <= 0
+        || !real_template(&json!({
+            "url": base_url,
+            "apiKey": api_key,
+            "wbSwitchManaged": true,
+        }))
+    {
         return Err("当前用户的模型连接参数无效".into());
     }
 
@@ -260,9 +262,16 @@ fn workbuddy_update_connection(
         .chain(disabled.iter())
         .chain(templates.iter())
         .filter(|model| managed_user_id(model) == Some(user_id) && real_template(model))
-        .filter_map(|model| model.get("apiKey").and_then(Value::as_str).map(str::to_string))
+        .filter_map(|model| {
+            model
+                .get("apiKey")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
         .collect();
-    let shared_old_key = (old_keys.len() == 1).then(|| old_keys.iter().next().cloned()).flatten();
+    let shared_old_key = (old_keys.len() == 1)
+        .then(|| old_keys.iter().next().cloned())
+        .flatten();
     let belongs_to_connection = |model: &Value| {
         managed(model)
             && (managed_user_id(model) == Some(user_id)
@@ -277,20 +286,25 @@ fn workbuddy_update_connection(
         .chain(templates.iter())
         .find(|model| belongs_to_connection(model))
         .cloned()
-        .unwrap_or_else(|| json!({
-            "id": "wb-switch-template",
-            "name": "wb-switch-template",
-            "vendor": "Sub2API",
-            "maxInputTokens": 200000,
-            "maxOutputTokens": 65536,
-            "supportsImages": false,
-            "supportsReasoning": false,
-            "supportsToolCall": true,
-            "useCustomProtocol": false,
-            "wbSwitchManaged": true,
-        }));
+        .unwrap_or_else(|| {
+            json!({
+                "id": "wb-switch-template",
+                "name": "wb-switch-template",
+                "vendor": "Sub2API",
+                "maxInputTokens": 200000,
+                "maxOutputTokens": 65536,
+                "supportsImages": false,
+                "supportsReasoning": false,
+                "supportsToolCall": true,
+                "useCustomProtocol": false,
+                "wbSwitchManaged": true,
+            })
+        });
     for models in [&mut active, &mut disabled] {
-        for model in models.iter_mut().filter(|model| belongs_to_connection(model)) {
+        for model in models
+            .iter_mut()
+            .filter(|model| belongs_to_connection(model))
+        {
             let object = model.as_object_mut().ok_or("WorkBuddy 模型格式无效")?;
             object.insert("url".into(), json!(base_url));
             object.insert("apiKey".into(), json!(api_key));
@@ -298,7 +312,9 @@ fn workbuddy_update_connection(
         }
     }
     templates.retain(|model| !belongs_to_connection(model));
-    let object = template.as_object_mut().ok_or("WorkBuddy 模型模板格式无效")?;
+    let object = template
+        .as_object_mut()
+        .ok_or("WorkBuddy 模型模板格式无效")?;
     object.insert("url".into(), json!(base_url));
     object.insert("apiKey".into(), json!(api_key));
     object.insert("wbSwitchUserId".into(), json!(user_id));
@@ -670,35 +686,59 @@ fn dsh_remove_external(
     }
 
     let mut root = yaml_root(paths)?;
+    let mut disabled = read_json_array(&paths.dsh_disabled)?;
     if let Some(provider) = dsh_provider_mut_by_name(&mut root, provider_name)? {
         if let Some(models) = provider
             .get_mut(yaml_key("models"))
             .and_then(YamlValue::as_sequence_mut)
         {
-            if let Some(index) = models
-                .iter()
-                .position(|model| dsh_model_id(model) == Some(id))
-            {
-                if provider_name == MANAGED_PROVIDER && dsh_managed(&models[index]) {
+            if models.iter().any(|model| dsh_model_id(model) == Some(id)) {
+                if provider_name == MANAGED_PROVIDER
+                    && models
+                        .iter()
+                        .any(|model| dsh_model_id(model) == Some(id) && dsh_managed(model))
+                {
                     return Err("Switch 管理模型只能禁用或启用，不能移除".into());
                 }
-                models.remove(index);
+                if provider_name == MANAGED_PROVIDER
+                    && disabled.iter().any(|model| {
+                        model_id(model) == Some(id)
+                            && dsh_disabled_provider_name(model) == provider_name
+                            && model.get("managed").and_then(Value::as_bool) != Some(false)
+                    })
+                {
+                    return Err("Switch 管理模型只能禁用或启用，不能移除".into());
+                }
+                let previous_len = disabled.len();
+                disabled.retain(|model| {
+                    model_id(model) != Some(id)
+                        || dsh_disabled_provider_name(model) != provider_name
+                });
+                if disabled.len() != previous_len {
+                    write_json_array(&paths.dsh_disabled, &disabled)?;
+                }
+                models.retain(|model| dsh_model_id(model) != Some(id));
                 dsh_save(paths, &root)?;
                 return public_dsh(paths);
             }
         }
     }
 
-    let mut disabled = read_json_array(&paths.dsh_disabled)?;
-    if let Some(index) = disabled.iter().position(|model| {
+    if disabled.iter().any(|model| {
         model_id(model) == Some(id) && dsh_disabled_provider_name(model) == provider_name
     }) {
         if provider_name == MANAGED_PROVIDER
-            && disabled[index].get("managed").and_then(Value::as_bool) != Some(false)
+            && disabled.iter().any(|model| {
+                model_id(model) == Some(id)
+                    && dsh_disabled_provider_name(model) == provider_name
+                    && model.get("managed").and_then(Value::as_bool) != Some(false)
+            })
         {
             return Err("Switch 管理模型只能禁用或启用，不能移除".into());
         }
-        disabled.remove(index);
+        disabled.retain(|model| {
+            model_id(model) != Some(id) || dsh_disabled_provider_name(model) != provider_name
+        });
         write_json_array(&paths.dsh_disabled, &disabled)?;
         return public_dsh(paths);
     }
@@ -815,7 +855,11 @@ pub fn local_workbuddy_import(models: Vec<Value>, user_id: Option<i64>) -> Resul
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn local_workbuddy_update_connection(user_id: i64, base_url: String, api_key: String) -> Result<Value, String> {
+pub fn local_workbuddy_update_connection(
+    user_id: i64,
+    base_url: String,
+    api_key: String,
+) -> Result<Value, String> {
     Ok(json!({"models": workbuddy_update_connection(&paths(), user_id, &base_url, &api_key)?}))
 }
 
@@ -961,9 +1005,11 @@ mod tests {
             &[template(), json!({"id":"second","url":"https://other.example/v1","apiKey":"sk-other-key","wbSwitchManaged":true,"wbSwitchUserId":9})],
         )
         .unwrap();
-        assert!(workbuddy_import(&temp.paths, vec![json!({"id":"ambiguous"})], 10)
-            .unwrap_err()
-            .contains("连接模板"));
+        assert!(
+            workbuddy_import(&temp.paths, vec![json!({"id":"ambiguous"})], 10)
+                .unwrap_err()
+                .contains("连接模板")
+        );
         write_json_array(&temp.paths.workbuddy, &[template()]).unwrap();
         workbuddy_import(&temp.paths, vec![json!({"id":"new","name":"New"})], 7).unwrap();
         let models = read_json_array(&temp.paths.workbuddy).unwrap();
@@ -984,25 +1030,37 @@ mod tests {
         legacy["id"] = json!("legacy");
         legacy["wbSwitchUserId"] = json!(8);
         let other = json!({"id":"other","url":"https://other.example/v1","apiKey":"sk-other-key","wbSwitchManaged":true,"wbSwitchUserId":9});
-        write_json_array(&temp.paths.workbuddy, &[template(), legacy, other, external_workbuddy_model()]).unwrap();
-        workbuddy_update_connection(&temp.paths, 7, "https://new.example/v1", "sk-new-key").unwrap();
+        write_json_array(
+            &temp.paths.workbuddy,
+            &[template(), legacy, other, external_workbuddy_model()],
+        )
+        .unwrap();
+        workbuddy_update_connection(&temp.paths, 7, "https://new.example/v1", "sk-new-key")
+            .unwrap();
 
         let models = read_json_array(&temp.paths.workbuddy).unwrap();
         for id in ["seed", "legacy"] {
-            let model = models.iter().find(|model| model_id(model) == Some(id)).unwrap();
+            let model = models
+                .iter()
+                .find(|model| model_id(model) == Some(id))
+                .unwrap();
             assert_eq!(model["url"], "https://new.example/v1");
             assert_eq!(model["apiKey"], "sk-new-key");
             assert_eq!(model["wbSwitchUserId"], 7);
         }
         assert_eq!(models[2]["apiKey"], "sk-other-key");
         assert_eq!(models[3]["apiKey"], "sk-external-key");
-        assert!(public_workbuddy(&temp.paths).unwrap().iter().all(|model| model.get("apiKey").is_none()));
+        assert!(public_workbuddy(&temp.paths)
+            .unwrap()
+            .iter()
+            .all(|model| model.get("apiKey").is_none()));
     }
 
     #[test]
     fn workbuddy_connection_creates_a_template_for_first_import() {
         let temp = TempModels::new();
-        workbuddy_update_connection(&temp.paths, 7, "https://new.example/v1", "sk-new-key").unwrap();
+        workbuddy_update_connection(&temp.paths, 7, "https://new.example/v1", "sk-new-key")
+            .unwrap();
         let templates = read_json_array(&temp.paths.workbuddy_templates).unwrap();
         assert_eq!(templates.len(), 1);
         assert_eq!(templates[0]["wbSwitchUserId"], 7);
@@ -1217,6 +1275,116 @@ mod tests {
         assert!(models
             .iter()
             .any(|model| model["id"] == "duplicate" && model["providerName"] == MANAGED_PROVIDER));
+    }
+
+    #[test]
+    fn harness_remove_clears_stale_disabled_copy_only_for_target_provider() {
+        let temp = TempModels::new();
+        write_text(&temp.paths.dsh, dsh_duplicate_fixture()).unwrap();
+        write_json_array(
+            &temp.paths.dsh_disabled,
+            &[
+                json!({"id": "duplicate", "providerName": "first", "managed": false}),
+                json!({"id": "duplicate", "providerName": "second", "managed": false}),
+            ],
+        )
+        .unwrap();
+
+        let models = dsh_remove_external(&temp.paths, "duplicate", "first").unwrap();
+        assert!(!models
+            .iter()
+            .any(|model| model["id"] == "duplicate" && model["providerName"] == "first"));
+        assert!(models
+            .iter()
+            .any(|model| model["id"] == "duplicate" && model["providerName"] == "second"));
+        let disabled = read_json_array(&temp.paths.dsh_disabled).unwrap();
+        assert_eq!(disabled.len(), 1);
+        assert_eq!(disabled[0]["providerName"], "second");
+    }
+
+    #[test]
+    fn harness_external_remove_does_not_delete_managed_backup() {
+        let temp = TempModels::new();
+        let yaml = dsh_fixture().replace("managed: true", "managed: false");
+        write_text(&temp.paths.dsh, &yaml).unwrap();
+        write_json_array(
+            &temp.paths.dsh_disabled,
+            &[json!({"id": "seed", "providerName": MANAGED_PROVIDER, "managed": true})],
+        )
+        .unwrap();
+
+        assert!(dsh_remove_external(&temp.paths, "seed", MANAGED_PROVIDER).is_err());
+        assert_eq!(read_json_array(&temp.paths.dsh_disabled).unwrap().len(), 1);
+        assert!(public_dsh(&temp.paths)
+            .unwrap()
+            .iter()
+            .any(|model| model["id"] == "seed"));
+    }
+
+    #[test]
+    fn harness_external_remove_clears_duplicate_active_and_disabled_records() {
+        let temp = TempModels::new();
+        let yaml = dsh_fixture().replace("- id: other\n            name: Other", "- id: other\n            name: Other\n          - id: other\n            name: Other duplicate");
+        write_text(&temp.paths.dsh, &yaml).unwrap();
+        write_json_array(
+            &temp.paths.dsh_disabled,
+            &[
+                json!({"id":"other", "providerName":"my", "managed":false}),
+                json!({"id":"other", "providerName":"my", "managed":false}),
+                json!({"id":"other", "providerName":"elsewhere", "managed":false}),
+            ],
+        )
+        .unwrap();
+        dsh_remove_external(&temp.paths, "other", "my").unwrap();
+        assert!(!public_dsh(&temp.paths)
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "other" && m["providerName"] == "my"));
+        assert_eq!(read_json_array(&temp.paths.dsh_disabled).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn harness_external_remove_checks_all_disabled_duplicates_for_managed_items() {
+        let temp = TempModels::new();
+        write_text(&temp.paths.dsh, dsh_fixture()).unwrap();
+        write_json_array(
+            &temp.paths.dsh_disabled,
+            &[
+                json!({"id":"absent", "providerName":MANAGED_PROVIDER, "managed":false}),
+                json!({"id":"absent", "providerName":MANAGED_PROVIDER, "managed":true}),
+            ],
+        )
+        .unwrap();
+        assert!(dsh_remove_external(&temp.paths, "absent", MANAGED_PROVIDER).is_err());
+        assert_eq!(read_json_array(&temp.paths.dsh_disabled).unwrap().len(), 2);
+        dsh_remove_external(&temp.paths, "absent", "my").unwrap_err();
+        write_json_array(
+            &temp.paths.dsh_disabled,
+            &[
+                json!({"id":"absent", "providerName":"my", "managed":false}),
+                json!({"id":"absent", "providerName":"my", "managed":false}),
+                json!({"id":"absent", "providerName":"other", "managed":false}),
+            ],
+        )
+        .unwrap();
+        dsh_remove_external(&temp.paths, "absent", "my").unwrap();
+        assert_eq!(read_json_array(&temp.paths.dsh_disabled).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn harness_external_remove_checks_all_active_duplicates_for_managed_items() {
+        let temp = TempModels::new();
+        let yaml = dsh_fixture().replace("- id: seed\n            name: Seed\n            managed: true", "- id: seed\n            name: External\n            managed: false\n          - id: seed\n            name: Managed\n            managed: true");
+        write_text(&temp.paths.dsh, &yaml).unwrap();
+        assert!(dsh_remove_external(&temp.paths, "seed", MANAGED_PROVIDER).is_err());
+        assert_eq!(
+            public_dsh(&temp.paths)
+                .unwrap()
+                .iter()
+                .filter(|m| m["id"] == "seed")
+                .count(),
+            2
+        );
     }
 
     #[test]

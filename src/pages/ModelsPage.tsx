@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { DEMO_UNAVAILABLE_MESSAGE, demoModeEnabled } from "@/lib/demo-mode";
 import { authChangedEvent, readClientToken } from "@/lib/auth";
 import { isDesktop } from "@/lib/api";
-import { mergeModelCatalog, type ModelDefinition } from "@/lib/model-catalog";
+import { groupModelCatalog, isOurModel, mergeModelCatalog, type ModelDefinition } from "@/lib/model-catalog";
 import {
   disableModelFromDsh, disableModelFromWorkBuddy, enableModelFromDsh, enableModelFromWorkBuddy,
   fetchDshModels, fetchSub2ApiModels, fetchWorkBuddyModels, hasSub2ApiBackend,
@@ -124,18 +124,11 @@ export default function ModelsPage() {
 
   const importedDefinitions = useMemo(() => importedModels.map(toModelDefinition), [importedModels]);
   const normalizedQuery = query.trim().toLowerCase();
-  const allModels = useMemo(() => mergeModelCatalog(catalog, importedDefinitions, target === "dsh"), [catalog, importedDefinitions, target]);
+  const allModels = useMemo(() => mergeModelCatalog(catalog, importedDefinitions, true), [catalog, importedDefinitions]);
   const filteredModels = useMemo(() => allModels.filter((model) => !normalizedQuery || [model.id, model.name, model.provider, model.description].some((value) => value.toLowerCase().includes(normalizedQuery))), [allModels, normalizedQuery]);
   const visibleModels = filteredModels;
-  const groupedModels = useMemo(() => {
-    const groups = new Map<string, ModelDefinition[]>();
-    for (const model of visibleModels) {
-      const group = model.provider.toLowerCase() === "openai" ? "OPENAI" : model.provider;
-      groups.set(group, [...(groups.get(group) ?? []), model]);
-    }
-    return [...groups.entries()].sort(([left], [right]) => left === "wb-switch" ? -1 : right === "wb-switch" ? 1 : left.localeCompare(right));
-  }, [visibleModels]);
-  const openAiModels = allModels.filter((model) => model.provider.toLowerCase() === "openai");
+  const groupedModels = useMemo(() => groupModelCatalog(visibleModels), [visibleModels]);
+  const openAiModels = allModels.filter((model) => !isOurModel(model) && model.provider.toLowerCase() === "openai");
   const openAiAllEnabled = openAiModels.length > 0 && openAiModels.every((model) => model.localInstalled && !model.disabled);
 
   async function importModels(ids: string[]) {

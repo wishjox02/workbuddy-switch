@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "workbuddy-switch",
+  "productName": "小玉米",
   "mainBinaryName": "小玉米",
-  "version": "0.1.63",
+  "version": "0.1.64",
   "identifier": "com.wbswitch.app",
   "build": {
     "beforeDevCommand": "npm run dev:desktop",

@@ -2,7 +2,7 @@
 # 纯命令行打 dmg（不依赖 Finder/AppleScript，CI 无头环境可用）
 # 用法：sh scripts/make-dmg.sh <版本> <arch> [.app 路径]
 #   arch: aarch64 | x64
-#   .app 路径默认 target/release/bundle/macos/workbuddy-switch.app
+#   .app 路径默认 target/release/bundle/macos/小玉米.app
 #   DMG 内含「应用程序」文件夹链接，拖入即安装到 /Applications
 #
 # dmgbuild writes the Finder layout and invokes hdiutil under the hood.  Do
@@ -24,7 +24,7 @@ fi
 
 V=$1
 ARCH=$2
-APP=${3:-target/release/bundle/macos/workbuddy-switch.app}
+APP=${3:-target/release/bundle/macos/小玉米.app}
 
 if [ -z "$V" ] || [ -z "$ARCH" ]; then
   usage
@@ -59,7 +59,7 @@ echo "打 dmg: $APP → $OUT"
 dmgbuild \
   -s "$SETTINGS" \
   -D "app=$APP" \
-  "workbuddy-switch" \
+  "小玉米" \
   "$TMP_OUT"
 
 # Publish atomically after dmgbuild has completed.  A failed build therefore

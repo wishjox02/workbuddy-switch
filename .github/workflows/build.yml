@@ -225,13 +225,13 @@ jobs:
           echo "bundle after build:"
           find "$BUNDLE_ROOT" -type f | sort || true
           if [ "${{ matrix.bundles }}" = "nsis" ]; then
-            STALE=$(find "$BUNDLE_ROOT" -type f -name '*-setup.exe' ! -name "workbuddy-switch_${VER}_x64-setup.exe" || true)
+            STALE=$(find "$BUNDLE_ROOT" -type f -name '*-setup.exe' ! -name "小玉米_${VER}_x64-setup.exe" || true)
             if [ -n "$STALE" ]; then
               echo "error: stale Windows installer still present:" >&2
               printf '%s\n' "$STALE" >&2
               exit 1
             fi
-            test -f "$BUNDLE_ROOT/nsis/workbuddy-switch_${VER}_x64-setup.exe"
+            test -f "$BUNDLE_ROOT/nsis/小玉米_${VER}_x64-setup.exe"
           fi
           find "$BUNDLE_ROOT" -type f \
             \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.deb' \
@@ -239,7 +239,7 @@ jobs:
             -exec cp {} dist-bin/ \;
           # mac：纯命令行打 dmg（CI 无 Finder，Tauri 自带的 bundle_dmg.sh 会失败）
           if [ "${{ matrix.bundles }}" = "app" ]; then
-            APP="target/${{ matrix.target }}/release/bundle/macos/workbuddy-switch.app"
+            APP="target/${{ matrix.target }}/release/bundle/macos/小玉米.app"
             MAIN="$APP/Contents/MacOS/workbuddy-switch"
             RUNTIME="$APP/Contents/MacOS/agent-studio-runtime"
             test -f "$MAIN" && test -f "$RUNTIME"
@@ -285,7 +285,7 @@ jobs:
             MOUNT="$RUNNER_TEMP/wb-switch-dmg-verify"
             mkdir -p "$MOUNT"
             hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG"
-            codesign --verify --deep --strict --verbose=2 "$MOUNT/workbuddy-switch.app"
+            codesign --verify --deep --strict --verbose=2 "$MOUNT/小玉米.app"
             hdiutil detach "$MOUNT"
             cp "$DMG" dist-bin/
           fi
@@ -341,7 +341,7 @@ jobs:
             exit 0
           fi
           if [ "$UPDATE_OS" = "windows" ]; then
-            ARCHIVE="$BUNDLE_DIR/workbuddy-switch_${VER}_x64-setup.exe"
+            ARCHIVE="$BUNDLE_DIR/小玉米_${VER}_x64-setup.exe"
           else
             ARCHIVE="$(find "$BUNDLE_DIR" -maxdepth 1 -type f -name '*.app.tar.gz' | sort)"
             COUNT=$(printf '%s\n' "$ARCHIVE" | sed '/^$/d' | wc -l | tr -d ' ')
@@ -358,7 +358,7 @@ jobs:
           cp "$ARCHIVE" "dist-bin/$UPDATE_ARCHIVE_NAME"
           cp "$ARCHIVE.sig" "dist-bin/$UPDATE_ARCHIVE_NAME.sig"
           if [ "$UPDATE_OS" = "windows" ]; then
-            cmp -s "dist-bin/$UPDATE_ARCHIVE_NAME" "dist-bin/workbuddy-switch_${VER}_x64-setup.exe"
+            cmp -s "dist-bin/$UPDATE_ARCHIVE_NAME" "dist-bin/小玉米_${VER}_x64-setup.exe"
           fi
           UPDATE_VERSION="$VER" sh scripts/gen-update-json.sh
           MANIFEST="$BUNDLE_DIR/latest-${UPDATE_OS}-${UPDATE_ARCH}.json"

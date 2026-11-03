@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mergeModelCatalog, type ModelDefinition } from "./model-catalog";
+import { groupModelCatalog, mergeModelCatalog, type ModelDefinition } from "./model-catalog";
 
 function model(id: string, overrides: Partial<ModelDefinition> = {}): ModelDefinition {
   return { id, name: id, provider: "Sub2API", description: "remote", context: "chat", ...overrides };
@@ -30,5 +30,20 @@ describe("mergeModelCatalog", () => {
 
     expect(result).toHaveLength(2);
     expect(result.map((item) => item.provider)).toEqual(["wb-switch", "my"]);
+  });
+});
+
+describe("groupModelCatalog", () => {
+  it("places remote and managed models first without absorbing third-party models with the same ID", () => {
+    const models = mergeModelCatalog(
+      [model("shared"), model("remote", { provider: "openai" })],
+      [model("shared", { provider: "OPENAI", managed: false }), model("shared", { provider: "wb-switch", managed: true })],
+      true,
+    );
+    const groups = groupModelCatalog(models);
+    expect(groups.map(([name]) => name)).toEqual(["我们的模型", "OPENAI"]);
+    expect(groups[0][1].map((item) => item.id)).toEqual(["shared", "remote"]);
+    expect(groups[1][1]).toHaveLength(1);
+    expect(groups[1][1][0]).toMatchObject({ managed: false, localInstalled: true });
   });
 });
