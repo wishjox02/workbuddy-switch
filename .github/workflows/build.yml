@@ -234,7 +234,14 @@ jobs:
             -exec cp {} dist-bin/ \;
           # mac：纯命令行打 dmg（CI 无 Finder，Tauri 自带的 bundle_dmg.sh 会失败）
           if [ "${{ matrix.bundles }}" = "app" ]; then
-            sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "target/${{ matrix.target }}/release/bundle/macos/workbuddy-switch.app"
+            APP="target/${{ matrix.target }}/release/bundle/macos/workbuddy-switch.app"
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              codesign --force --deep --sign - "$APP"
+              codesign --verify --deep --strict --verbose=2 "$APP"
+              spctl --assess --type execute --verbose=2 "$APP" || true
+            fi
+            sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "$APP"
+            hdiutil verify "workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg"
             cp "workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg" dist-bin/
           fi
 
