@@ -240,7 +240,7 @@ jobs:
           # mac：纯命令行打 dmg（CI 无 Finder，Tauri 自带的 bundle_dmg.sh 会失败）
           if [ "${{ matrix.bundles }}" = "app" ]; then
             APP="target/${{ matrix.target }}/release/bundle/macos/workbuddy-switch.app"
-            MAIN="$APP/Contents/MacOS/小玉米"
+            MAIN="$APP/Contents/MacOS/workbuddy-switch"
             RUNTIME="$APP/Contents/MacOS/agent-studio-runtime"
             test -f "$MAIN" && test -f "$RUNTIME"
             file "$MAIN" "$RUNTIME"
