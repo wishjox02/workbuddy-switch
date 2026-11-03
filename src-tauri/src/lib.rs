@@ -327,6 +327,13 @@ pub fn run() {
     app.run(|_app_handle, event| {
         #[cfg(desktop)]
         {
+            #[cfg(target_os = "macos")]
+            if matches!(&event, tauri::RunEvent::Ready)
+                && !tray::is_silent_startup(std::env::args())
+            {
+                // The configured window starts hidden; show it once the macOS event loop is ready.
+                tray::show_main_window_on_reopen(_app_handle);
+            }
             // 点击 Dock / Finder 再次激活已运行实例：窗口已隐藏到托盘时显示主窗口。
             // `Reopen` 在主线程派发，可直接调用窗口路径。
             #[cfg(target_os = "macos")]

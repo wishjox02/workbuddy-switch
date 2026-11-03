@@ -246,6 +246,26 @@ jobs:
             file "$MAIN" "$RUNTIME"
             codesign --verify --deep --strict --verbose=2 "$APP"
             spctl --assess --type execute --verbose=2 "$APP" || true
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              open -n "$APP" || true
+              sleep 5
+              APP_PID=$(pgrep -f "$APP/Contents/MacOS/小玉米" | head -1 || true)
+              echo "macOS app process: ${APP_PID:-not running}"
+              if [ -n "$APP_PID" ]; then
+                APP_PID="$APP_PID" swift -e '
+                  import CoreGraphics
+                  import Foundation
+                  let pid = Int32(ProcessInfo.processInfo.environment["APP_PID"] ?? "0") ?? 0
+                  let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] ?? []
+                  let visible = windows.filter {
+                    ($0[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid &&
+                    ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0
+                  }
+                  print("visible app windows: \(visible.count)")
+                ' || true
+                kill "$APP_PID" || true
+              fi
+            fi
             sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "$APP"
             DMG="workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg"
             hdiutil verify "$DMG"
