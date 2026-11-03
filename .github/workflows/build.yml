@@ -247,11 +247,11 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$APP"
             spctl --assess --type execute --verbose=2 "$APP" || true
             if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-              open -n "$APP" || true
+              "$MAIN" > "$RUNNER_TEMP/wb-switch-launch.log" 2>&1 &
+              APP_PID=$!
               sleep 5
-              APP_PID=$(pgrep -f "$APP/Contents/MacOS/小玉米" | head -1 || true)
-              echo "macOS app process: ${APP_PID:-not running}"
-              if [ -n "$APP_PID" ]; then
+              if kill -0 "$APP_PID" 2>/dev/null; then
+                echo "macOS app process: running pid=$APP_PID"
                 APP_PID="$APP_PID" swift -e '
                   import CoreGraphics
                   import Foundation
@@ -264,7 +264,10 @@ jobs:
                   print("visible app windows: \(visible.count)")
                 ' || true
                 kill "$APP_PID" || true
+              else
+                wait "$APP_PID" || echo "macOS app exited with status $?"
               fi
+              cat "$RUNNER_TEMP/wb-switch-launch.log"
             fi
             sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "$APP"
             DMG="workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg"
