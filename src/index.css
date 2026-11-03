@@ -217,6 +217,21 @@
     background: transparent;
   }
 
+  .wb-app-shell > aside .update-center {
+    display: block;
+    padding-inline: 0;
+  }
+
+  .wb-app-shell > aside .update-center > div {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .wb-app-shell > aside .update-center .update-center-copy,
+  .wb-app-shell > aside .update-center .update-center-dot {
+    display: none;
+  }
+
   .wb-app-shell > aside .personal-center > button,
   .wb-app-shell > aside .personal-center > div {
     justify-content: center;

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import * as api from "@/lib/api";
 import type { UpdateSnapshot } from "@/lib/types";
+import { adminBackendUrl } from "@/lib/admin-backend";
 
 /**
  * 统一更新服务状态（Rust 单一真相源）。
@@ -36,13 +37,25 @@ function publish(next: UpdateSnapshot) {
 
 function start() {
   const current = ++generation;
-  void api
-    .updateState()
+  void (async () => {
+    if (api.isDesktop()) {
+      let changed = false;
+      try {
+        changed = await api.configureUpdateBackend(adminBackendUrl());
+      } catch {
+        // The updater persists an invalid-source marker before reporting the error.
+        // Force a check so its shared state and tray both show the failure.
+        changed = true;
+      }
+      if (changed) await api.checkUpdate(undefined, true).catch(() => {});
+    }
+    return api.updateState();
+  })()
     .then((state) => {
       if (current === generation && state) publish(state);
     })
-    .catch(() => {
-      // 拉取失败保持上一次快照：事件推送仍会覆盖它。
+    .catch((error) => {
+      if (current === generation) publish({ ...IDLE_SNAPSHOT, phase: "error", message: api.asError(error) });
     });
   if (api.isWebui()) return;
   void listen<UpdateSnapshot>("update-state", (event) => {

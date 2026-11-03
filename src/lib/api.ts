@@ -1000,6 +1000,11 @@ export function checkUpdate(proxy?: string, force?: boolean): Promise<UpdateInfo
   return call("check_update", { proxy: proxy?.trim() || null, force: force ?? false });
 }
 
+export function configureUpdateBackend(url: string): Promise<boolean> {
+  if (isWebui() || demoModeEnabled) return Promise.resolve(false);
+  return call("configure_update_backend", { url });
+}
+
 export function relaunchApp(): Promise<void> {
   return call("relaunch_app");
 }

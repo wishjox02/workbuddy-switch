@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw } from "lucide-react";
 
 import { DemoAction } from "@/components/demo-action";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import * as api from "@/lib/api";
-import { GITHUB_RELEASE_URL, openReleaseUrl } from "@/lib/update";
+import { openReleaseUrl } from "@/lib/update";
 import { useUpdateState } from "@/lib/use-update-state";
 
 interface UpdateInstallDialogProps {
@@ -48,7 +48,8 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
   async function startDownload() {
     setActionError(null);
     try {
-      await api.updateDownload();
+      if (snapshot.manualUrl) await openReleaseUrl(snapshot.manualUrl);
+      else await api.updateDownload();
     } catch (e) {
       setActionError(`下载更新失败：${api.asError(e)}`);
     }
@@ -56,7 +57,7 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
 
   /** 与托盘一致：已知目标版本则重试下载，否则重试检查。 */
   async function retry() {
-    if (snapshot.latest) {
+    if (snapshot.phase === "error" && snapshot.latest && !snapshot.manualUrl) {
       await startDownload();
       return;
     }
@@ -82,14 +83,6 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
     }
   }
 
-  async function openRelease() {
-    try {
-      await openReleaseUrl(GITHUB_RELEASE_URL);
-    } catch (e) {
-      setActionError(api.asError(e));
-    }
-  }
-
   return (
     <Dialog
       open={open}
@@ -103,34 +96,35 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
           <DialogTitle>
             {phase === "checking" && "正在检查更新"}
             {phase === "downloading" && `正在升级到 v${targetVersion}`}
-            {(phase === "idle" || phase === "upToDate") && "当前已是最新版本"}
+            {phase === "idle" && "检查更新"}
+            {phase === "upToDate" && "当前已是最新版本"}
             {phase === "available" && "发现新版本"}
             {phase === "readyToRestart" && "更新已就绪"}
             {phase === "error" && "拉取更新失败"}
           </DialogTitle>
           <DialogDescription>
-            {phase === "checking" && "正在检查 GitHub Release 中的签名更新包，请稍候。"}
+            {phase === "checking" && "正在从后台检查最新版本，请稍候。"}
             {phase === "downloading" &&
               "请不要关闭应用，更新包下载完成后由你决定何时重启安装。"}
-            {(phase === "idle" || phase === "upToDate") &&
-              "没有发现高于当前版本的签名更新包。"}
+            {phase === "idle" && "尚未检查版本。"}
+            {phase === "upToDate" && "后台没有可用的新版本。"}
             {phase === "available" &&
-              `发现新版本 v${targetVersion}，下载后由你决定何时重启安装。`}
+              (snapshot.manualUrl ? `发现新版本 v${targetVersion}，请下载安装包并手动安装。绿色版请使用对应绿色包，安装包不能直接覆盖绿色目录。` : `发现新版本 v${targetVersion}，下载后由你决定何时重启安装。`)}
             {phase === "readyToRestart" && "更新包已下载，重启应用后完成安装并生效。"}
-            {phase === "error" && "自动更新未完成，你仍然可以从 GitHub Release 页面手动下载。"}
+            {phase === "error" && "检查或下载更新失败，请重试。"}
           </DialogDescription>
         </DialogHeader>
 
         {phase === "checking" && (
           <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            正在连接公开 Release 更新源…
+            正在连接后台版本服务…
           </div>
         )}
 
         {phase === "available" && (
           <div className="rounded-md border p-3 text-sm">
-            v{targetVersion} 已确认可升级。点击下方按钮开始下载；下载在后台进行，可随时从托盘查看进度。
+            {snapshot.manualUrl ? "下载将在浏览器中开始，完成后请根据下载包类型手动安装。" : "更新包将在后台下载。"}
           </div>
         )}
 
@@ -163,9 +157,10 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
         {phase === "error" && (
           <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
             <p className="text-destructive">{error}</p>
-            <p className="break-all text-xs text-muted-foreground">{GITHUB_RELEASE_URL}</p>
           </div>
         )}
+
+        {actionError && phase !== "error" && <p className="text-sm text-destructive">{actionError}</p>}
 
         <DialogFooter>
           {phase === "available" && (
@@ -196,10 +191,6 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
           )}
           {phase === "error" && (
             <>
-              <Button variant="outline" onClick={() => void openRelease()}>
-                <ExternalLink />
-                打开 GitHub Release
-              </Button>
               <DemoAction>
                 <Button onClick={() => void retry()}>
                   <RefreshCw />
@@ -208,11 +199,7 @@ export function UpdateInstallDialog({ open, onOpenChange }: UpdateInstallDialogP
               </DemoAction>
             </>
           )}
-          {(phase === "idle" || phase === "upToDate") && (
-            <Button variant="default" onClick={() => onOpenChange(false)}>
-              关闭
-            </Button>
-          )}
+          {(phase === "idle" || phase === "upToDate") && <Button onClick={() => void retry()}><RefreshCw />检查更新</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

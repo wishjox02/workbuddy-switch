@@ -1230,6 +1230,12 @@ pub fn save_github_config(config: Value) -> Result<Value, String> {
     Ok(update::load_github_config())
 }
 
+/// Configure the release/version service used by the desktop updater.
+#[tauri::command]
+pub fn configure_update_backend(url: String) -> Result<bool, String> {
+    crate::update_service::configure_backend(&url)
+}
+
 /// GET /api/update/check —— 检查 GitHub Releases 是否有新版本。
 /// force=true 时绕过缓存强制刷新（设置页手动检查）。
 ///

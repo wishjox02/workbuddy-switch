@@ -82,6 +82,7 @@ pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
     if let WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
         let _ = window.hide();
+        #[cfg(not(target_os = "macos"))]
         apply_dock_visible(window.app_handle(), false);
         emit_main_window_visible(window.app_handle(), false);
     }
@@ -1232,6 +1233,7 @@ mod tests {
                 percent,
                 message: None,
                 checked_at: None,
+                manual_url: None,
             };
 
         assert_eq!(

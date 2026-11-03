@@ -245,6 +245,11 @@ jobs:
             MAIN="$APP/Contents/MacOS/workbuddy-switch"
             RUNTIME="$APP/Contents/MacOS/agent-studio-runtime"
             test -f "$MAIN" && test -f "$RUNTIME"
+            ICON=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$APP/Contents/Info.plist")
+            case "$ICON" in *.icns) ;; *) ICON="$ICON.icns" ;; esac
+            test -s "$APP/Contents/Resources/$ICON"
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleName' "$APP/Contents/Info.plist"
+            file "$APP/Contents/Resources/$ICON"
             file "$MAIN" "$RUNTIME"
             codesign --verify --deep --strict --verbose=2 "$APP"
             spctl --assess --type execute --verbose=2 "$APP" || true
@@ -289,6 +294,8 @@ jobs:
             MOUNT="$RUNNER_TEMP/wb-switch-dmg-verify"
             mkdir -p "$MOUNT"
             hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG"
+            test -s "$MOUNT/小玉米.app/Contents/Resources/$ICON"
+            test -L "$MOUNT/Applications"
             codesign --verify --deep --strict --verbose=2 "$MOUNT/小玉米.app"
             hdiutil detach "$MOUNT"
             cp "$DMG" dist-bin/

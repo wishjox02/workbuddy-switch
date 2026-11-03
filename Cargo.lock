@@ -5650,7 +5650,7 @@ dependencies = [
 
 [[package]]
 name = "wb-switch-admin"
-version = "0.1.64"
+version = "0.1.65"
 dependencies = [
  "aes-gcm",
  "axum",
@@ -5669,7 +5669,7 @@ dependencies = [
 
 [[package]]
 name = "wb-switch-core"
-version = "0.1.64"
+version = "0.1.65"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5692,12 +5692,13 @@ dependencies = [
 
 [[package]]
 name = "wb-switch-rust"
-version = "0.1.64"
+version = "0.1.65"
 dependencies = [
  "libc",
  "objc2",
  "objc2-app-kit",
  "objc2-foundation",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -5718,7 +5719,7 @@ dependencies = [
 
 [[package]]
 name = "wb-switch-server"
-version = "0.1.64"
+version = "0.1.65"
 dependencies = [
  "axum",
  "rust-embed",

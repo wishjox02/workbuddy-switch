@@ -289,6 +289,7 @@ pub fn run() {
             commands::get_rotate_logs,
             commands::get_github_config,
             commands::save_github_config,
+            commands::configure_update_backend,
             commands::check_update,
             commands::update_state,
             commands::update_download,

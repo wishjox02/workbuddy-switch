@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import { DEMO_UNAVAILABLE_MESSAGE, demoModeEnabled } from "@/lib/demo-mode";
 import { isDesktop } from "@/lib/api";
 import {
-  createRechargeOrder, fetchRechargeConfig, fetchRechargeOrderStatus, fetchRechargeOrders, rechargePaymentTargets,
+  createRechargeOrder, fetchRechargeConfig, fetchRechargeOrderStatus, fetchRechargeOrders, rechargePaymentTargets, rechargeStatusState,
   type RechargeConfig, type RechargeOrder,
 } from "@/lib/sub2api";
 
@@ -126,7 +126,7 @@ export default function RechargePage() {
     const timer = setInterval(async () => {
       try {
         const order = await fetchRechargeOrderStatus(pollRef.current!);
-        if (order.status === "Paid" || order.status === "Credited") {
+        if (rechargeStatusState(order.status) === "credited") {
           toast.success("充值成功，余额已更新");
           clearInterval(timer);
           closePaymentDialog();
@@ -144,9 +144,13 @@ export default function RechargePage() {
     setChecking(true);
     try {
       const order = await fetchRechargeOrderStatus(pollRef.current);
-      if (order.status === "Paid" || order.status === "Credited") {
+      const state = rechargeStatusState(order.status);
+      if (state === "credited") {
         toast.success("支付已确认，余额已到账");
         closePaymentDialog();
+        void loadOrders();
+      } else if (state === "paid") {
+        toast.info("支付已确认，余额正在入账，请稍后查看订单状态。");
         void loadOrders();
       } else {
         toast.info(`当前订单状态：${STATUS_META[order.status]?.label ?? order.status}。若您刚完成支付，请稍等几秒后再试（支付平台回调可能有延迟）。`);

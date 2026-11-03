@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createRechargeOrder, fetchRechargeConfig, rechargePaymentTargets } from "./sub2api";
+import { createRechargeOrder, fetchRechargeConfig, rechargePaymentTargets, rechargeStatusState } from "./sub2api";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -81,5 +81,14 @@ describe("recharge payment targets", () => {
       qrcode: null,
       urlScheme: null,
     })).toEqual({ qrValue: null, fallbackUrl: "https://payment.example/checkout/order-1" });
+  });
+});
+
+describe("recharge order status", () => {
+  it("distinguishes payment confirmation from a credited balance", () => {
+    expect(rechargeStatusState("Pending")).toBe("other");
+    expect(rechargeStatusState("Failed")).toBe("other");
+    expect(rechargeStatusState("Paid")).toBe("paid");
+    expect(rechargeStatusState("Credited")).toBe("credited");
   });
 });

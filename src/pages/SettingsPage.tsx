@@ -3,7 +3,6 @@ import {
   ArrowUpCircle,
   ChevronDown,
   CircleCheck,
-  ExternalLink,
   Loader2,
   RefreshCw,
   Save,
@@ -42,7 +41,6 @@ import type {
   AutoRotateConfig,
   CheckinConfig,
   CheckinLog,
-  GithubConfig,
   RateLimitConfig,
   RateLimitHookStatus,
   RotateLog,
@@ -50,7 +48,6 @@ import type {
   TravelConfig,
   UpdateInfo,
 } from "@/lib/types";
-import { GITHUB_RELEASE_URL, GITHUB_REPOSITORY_URL, openReleaseUrl } from "@/lib/update";
 import { useUpdateState } from "@/lib/use-update-state";
 import { changeCompanionEnabled, reloadCompanionEnabled, useCompanionEnabled } from "@/lib/use-companion-enabled";
 import { cn } from "@/lib/utils";
@@ -93,7 +90,7 @@ function AdminBackendCard() {
   const [url, setUrl] = useState(() => adminBackendUrl());
   const [saving, setSaving] = useState(false);
 
-  function save() {
+  async function save() {
     const value = url.trim();
     if (!value) {
       toast.error("请输入后台地址");
@@ -109,8 +106,15 @@ function AdminBackendCard() {
     setSaving(true);
     const saved = saveAdminBackendUrl(value);
     setUrl(saved);
-    setSaving(false);
-    toast.success("后台地址已保存");
+    try {
+      if (api.isDesktop() && await api.configureUpdateBackend(adminBackendUrl())) void api.checkUpdate(undefined, true).catch(() => {});
+      toast.success("后台地址已保存");
+    } catch (error) {
+      if (api.isDesktop()) await api.checkUpdate(undefined, true).catch(() => {});
+      toast.error("更新服务配置失败", { description: api.asError(error) });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -1330,7 +1334,7 @@ function useAuthFile(): string | undefined {
   return useAccountsStore((s) => s.status?.authFile);
 }
 
-/** 自动更新：检查公开 GitHub Releases 源 + 安装签名更新。 */
+/** 从后台检查更新。 */
 function UpdateCard() {
   const version = useAccountsStore((s) => s.status?.version);
   // 阶段与进度来自 Rust 更新服务（托盘同源）：下载完成时按钮换成「重启以完成升级」。
@@ -1339,31 +1343,10 @@ function UpdateCard() {
   const [checking, setChecking] = useState(false);
   const [installOpen, setInstallOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const [githubConfig, setGithubConfig] = useState<GithubConfig>({});
-  const [proxyUrl, setProxyUrl] = useState("");
-  const [proxySaving, setProxySaving] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .getGithubConfig()
-      .then((config) => {
-        if (cancelled) return;
-        setGithubConfig(config);
-        setProxyUrl(config.proxy ?? "");
-      })
-      .catch((e) => {
-        if (!cancelled) toast.error("更新配置加载失败", { description: api.asError(e) });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   async function check() {
     setChecking(true);
     try {
-      const r = await api.checkUpdate(proxyUrl, true);
+      const r = await api.checkUpdate(undefined, true);
       setInfo(r);
       if (!r.ok) {
         toast.error("检查更新失败", { description: r.message || r.error });
@@ -1386,33 +1369,6 @@ function UpdateCard() {
     }
   }
 
-  async function saveProxy() {
-    const value = proxyUrl.trim();
-    if (value) {
-      try {
-        const parsed = new URL(value);
-        if (!parsed.hostname || !["http:", "https:"].includes(parsed.protocol)) {
-          throw new Error("unsupported proxy protocol");
-        }
-      } catch {
-        toast.error("代理地址格式不正确，请填写 HTTP/HTTPS 地址，例如 http://127.0.0.1:7897");
-        return;
-      }
-    }
-
-    setProxySaving(true);
-    try {
-      const saved = await api.saveGithubConfig({ ...githubConfig, proxy: value });
-      setGithubConfig(saved);
-      setProxyUrl(saved.proxy ?? "");
-      toast.success(value ? "更新代理已保存" : "已关闭更新代理");
-    } catch (e) {
-      toast.error("保存代理失败", { description: api.asError(e) });
-    } finally {
-      setProxySaving(false);
-    }
-  }
-
   return (
     <SettingsGroup
       id="settings-updates"
@@ -1425,42 +1381,9 @@ function UpdateCard() {
 
         <div className="flex min-w-0 items-center justify-between gap-3 border-b border-border/60 bg-muted/25 px-4 py-3 text-sm sm:px-5">
           <div className="min-w-0 flex-1">
-            <div className="font-medium">公开更新源</div>
-            <div className="truncate text-xs text-muted-foreground">{GITHUB_REPOSITORY_URL}</div>
+            <div className="font-medium">后台更新源</div>
+            <div className="truncate text-xs text-muted-foreground">{adminBackendUrl()}</div>
           </div>
-          <DemoAction><Button
-            variant="ghost"
-            size="icon"
-            title="打开 GitHub Release"
-            onClick={() => void openReleaseUrl(GITHUB_RELEASE_URL)}
-          >
-            <ExternalLink />
-          </Button></DemoAction>
-        </div>
-
-        <SettingsFieldRow
-          label="更新代理地址"
-          description="仅用于 GitHub 更新检查和安装包下载；留空表示关闭显式代理。"
-          htmlFor="update-proxy"
-          className="bg-muted/25"
-          operational
-        >
-          <Input
-            id="update-proxy"
-            className="w-full sm:w-80"
-            value={proxyUrl}
-            onChange={(event) => setProxyUrl(event.target.value)}
-            placeholder="例如 http://127.0.0.1:7897"
-            spellCheck={false}
-            autoComplete="off"
-          />
-        </SettingsFieldRow>
-
-        <div className="flex flex-wrap gap-2 border-b border-border/60 bg-muted/25 px-4 py-3 sm:px-5">
-          <DemoAction><Button size="sm" variant="outline" onClick={() => void saveProxy()} disabled={proxySaving}>
-            {proxySaving ? <Loader2 className="animate-spin" /> : <Save />}
-            保存代理
-          </Button></DemoAction>
         </div>
 
         <div className="flex flex-wrap gap-2 border-b-0 border-border/60 px-4 py-3 sm:px-5">
@@ -1495,16 +1418,6 @@ function UpdateCard() {
                     </Button>
                   )}
                 </DemoAction>
-              )}
-              {info.releaseUrl && (
-                <DemoAction><Button
-                  variant="link"
-                  size="sm"
-                  className="h-auto p-0"
-                  onClick={() => void openReleaseUrl(info.releaseUrl)}
-                >
-                  打开 GitHub Release
-                </Button></DemoAction>
               )}
             </AlertDescription>
           </Alert>

@@ -365,6 +365,12 @@ export interface RechargeConfig {
   activities: RechargeActivity[];
 }
 
+export function rechargeStatusState(status: string): "credited" | "paid" | "other" {
+  if (status === "Credited") return "credited";
+  if (status === "Paid") return "paid";
+  return "other";
+}
+
 async function rechargeRequest(path: string, init?: RequestInit): Promise<any> {
   const base = adminBackendUrl();
   if (!base) throw new Error("未配置后台地址，请在设置 → 后台服务中填写");

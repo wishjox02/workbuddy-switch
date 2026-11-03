@@ -845,6 +845,7 @@ export type UpdatePhase =
 export interface UpdateSnapshot {
   phase: UpdatePhase;
   latest: string | null;
+  manualUrl?: string | null;
   percent: number | null;
   message: string | null;
   checkedAt: number | null;

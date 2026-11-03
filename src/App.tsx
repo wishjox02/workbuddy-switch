@@ -150,36 +150,29 @@ function UpdateCenter({ running }: { running: boolean | undefined }) {
   const version = useAccountsStore((state) => state.status?.version);
   const snapshot = useUpdateState();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const hasKnownTarget = Boolean(snapshot.latest);
-  const hasUpdate =
-    snapshot.phase === "available" ||
-    snapshot.phase === "downloading" ||
-    snapshot.phase === "readyToRestart" ||
-    (hasKnownTarget && (snapshot.phase === "error" || snapshot.phase === "checking"));
   const updateHint =
     snapshot.phase === "downloading"
       ? snapshot.percent === null ? "正在下载更新…" : `正在下载更新 ${snapshot.percent}%`
       : snapshot.phase === "readyToRestart" ? "重启以完成升级"
-        : snapshot.phase === "error" ? "更新失败，点击重试"
-          : snapshot.phase === "checking" ? "正在检查…" : "更新";
+        : snapshot.phase === "error" ? "检查失败"
+          : snapshot.phase === "checking" ? "正在检查…"
+            : snapshot.phase === "available" ? `发现新版本 v${snapshot.latest}`
+              : snapshot.phase === "upToDate" ? "已是最新版本" : "检查更新";
 
   return (
     <>
-      <section className="mt-auto border-t border-sidebar-border/70 px-1 pt-4 text-xs">
+      <section className="update-center mt-auto border-t border-sidebar-border/70 px-1 pt-4 text-xs">
         <div className="flex items-center gap-2 rounded-xl bg-sidebar-accent/60 px-2.5 py-2 text-sidebar-foreground">
-          <StatusDot on={Boolean(running)} />
-          <span className="min-w-0 flex-1 truncate">小玉米</span>
-          <span className="text-sidebar-foreground/50">v{version || "?"}</span>
-          {hasUpdate && (
+          <StatusDot on={Boolean(running)} className="update-center-dot" />
+          <span className="update-center-copy min-w-0 flex-1"><span className="block truncate">v{version || "?"}</span><span className="block truncate text-[10px] text-sidebar-foreground/60">{updateHint}</span></span>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button type="button" size="icon" className="size-6 rounded-lg p-0" aria-label={updateHint} onClick={() => setDialogOpen(true)}>
-                  {snapshot.phase === "downloading" || snapshot.phase === "checking" ? <Loader2 className="size-3 animate-spin" /> : <ArrowUp className="size-3" />}
+                <Button type="button" variant={snapshot.phase === "available" ? "default" : "ghost"} size="icon" className="size-7 shrink-0 rounded-lg p-0" aria-label={updateHint} onClick={() => setDialogOpen(true)}>
+                  {snapshot.phase === "downloading" || snapshot.phase === "checking" ? <Loader2 className="size-4 animate-spin" /> : <ArrowUp className="size-4" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{updateHint}</TooltipContent>
             </Tooltip>
-          )}
         </div>
       </section>
       <UpdateInstallDialog open={dialogOpen} onOpenChange={setDialogOpen} />
