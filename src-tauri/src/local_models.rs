@@ -555,17 +555,22 @@ fn public_dsh(paths: &ModelPaths) -> Result<Vec<Value>, String> {
             }
         }
     }
-    for model in read_json_array(&paths.dsh_disabled)? {
+    let disabled = read_json_array(&paths.dsh_disabled)?;
+    for model in &disabled {
         let Some(id) = model_id(&model) else {
             continue;
         };
         let provider_name = dsh_disabled_provider_name(&model);
-        if active_model_keys.contains(&(provider_name.to_string(), id.to_string())) {
+        if !active_model_keys.insert((provider_name.to_string(), id.to_string())) {
             continue;
         }
         let name = model.get("name").and_then(Value::as_str).unwrap_or(id);
         let managed = provider_name == MANAGED_PROVIDER
-            && model.get("managed").and_then(Value::as_bool) != Some(false);
+            && disabled.iter().any(|item| {
+                model_id(item) == Some(id)
+                    && dsh_disabled_provider_name(item) == provider_name
+                    && item.get("managed").and_then(Value::as_bool) != Some(false)
+            });
         result.push(json!({"id": id, "name": name, "providerName": provider_name, "managed": managed, "disabled": true}));
     }
     Ok(result)
@@ -603,20 +608,33 @@ fn dsh_import(paths: &ModelPaths, models: Vec<Value>) -> Result<Vec<Value>, Stri
             }
             continue;
         }
-        if let Some(index) = disabled.iter().position(|model| {
+        if disabled.iter().any(|model| {
             model_id(model) == Some(id) && dsh_disabled_provider_name(model) == MANAGED_PROVIDER
         }) {
-            if disabled[index].get("managed").and_then(Value::as_bool) == Some(false) {
+            if disabled.iter().any(|model| {
+                model_id(model) == Some(id)
+                    && dsh_disabled_provider_name(model) == MANAGED_PROVIDER
+                    && model.get("managed").and_then(Value::as_bool) == Some(false)
+            }) {
                 return Err(format!("模型 {id} 是第三方或非托管的禁用配置，不能接管"));
             }
-            let mut restored = disabled.remove(index);
-            if let Some(object) = restored.as_object_mut() {
-                object.remove("providerName");
+            let mut i = 0;
+            while i < disabled.len() {
+                if model_id(&disabled[i]) != Some(id)
+                    || dsh_disabled_provider_name(&disabled[i]) != MANAGED_PROVIDER
+                {
+                    i += 1;
+                    continue;
+                }
+                let mut restored = disabled.remove(i);
+                if let Some(object) = restored.as_object_mut() {
+                    object.remove("providerName");
+                }
+                list.push(
+                    serde_yaml::to_value(restored)
+                        .map_err(|error| format!("恢复 Harness 模型失败：{error}"))?,
+                );
             }
-            list.push(
-                serde_yaml::to_value(restored)
-                    .map_err(|error| format!("恢复 Harness 模型失败：{error}"))?,
-            );
         } else {
             let name = input
                 .get("name")
@@ -769,22 +787,21 @@ fn dsh_disable_for_provider(
         .get_mut(yaml_key("models"))
         .and_then(YamlValue::as_sequence_mut)
         .ok_or("Harness wb-switch models 不是数组")?;
-    let index = models
-        .iter()
-        .position(|model| dsh_model_id(model) == Some(id))
-        .ok_or("模型不存在于 Harness provider")?;
-    let model = models.remove(index);
-    let mut disabled = read_json_array(&paths.dsh_disabled)?;
-    let mut model =
-        serde_json::to_value(model).map_err(|error| format!("备份 Harness 模型失败：{error}"))?;
-    if let Some(object) = model.as_object_mut() {
-        object.insert("providerName".into(), json!(provider_name));
+    if !models.iter().any(|model| dsh_model_id(model) == Some(id)) {
+        return Err("模型不存在于 Harness provider".into());
     }
-    if let Some(index) = disabled.iter().position(|item| {
-        model_id(item) == Some(id) && dsh_disabled_provider_name(item) == provider_name
-    }) {
-        disabled[index] = model;
-    } else {
+    let mut disabled = read_json_array(&paths.dsh_disabled)?;
+    let mut i = 0;
+    while i < models.len() {
+        if dsh_model_id(&models[i]) != Some(id) {
+            i += 1;
+            continue;
+        }
+        let mut model = serde_json::to_value(models.remove(i))
+            .map_err(|error| format!("备份 Harness 模型失败：{error}"))?;
+        if let Some(object) = model.as_object_mut() {
+            object.insert("providerName".into(), json!(provider_name));
+        }
         disabled.push(model);
     }
     write_json_array(&paths.dsh_disabled, &disabled)?;
@@ -830,14 +847,23 @@ fn dsh_enable_for_provider(
     if models.iter().any(|model| dsh_model_id(model) == Some(id)) {
         return Err("Harness 目标 provider 中已有同名活动模型，不能覆盖".into());
     }
-    let mut restored = disabled.remove(index);
-    if let Some(object) = restored.as_object_mut() {
-        object.remove("providerName");
+    let mut i = 0;
+    while i < disabled.len() {
+        if model_id(&disabled[i]) != Some(id)
+            || dsh_disabled_provider_name(&disabled[i]) != provider_name
+        {
+            i += 1;
+            continue;
+        }
+        let mut restored = disabled.remove(i);
+        if let Some(object) = restored.as_object_mut() {
+            object.remove("providerName");
+        }
+        models.push(
+            serde_yaml::to_value(restored)
+                .map_err(|error| format!("恢复 Harness 模型失败：{error}"))?,
+        );
     }
-    models.push(
-        serde_yaml::to_value(restored)
-            .map_err(|error| format!("恢复 Harness 模型失败：{error}"))?,
-    );
     dsh_save(paths, &root)?;
     write_json_array(&paths.dsh_disabled, &disabled)?;
     public_dsh(paths)
@@ -1414,6 +1440,46 @@ mod tests {
                 && model["providerName"] == "first"
                 && model["disabled"] == false
         }));
+        assert!(read_json_array(&temp.paths.dsh_disabled)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn harness_toggle_preserves_all_duplicate_models_and_other_providers() {
+        let temp = TempModels::new();
+        let yaml = dsh_fixture().replace("- id: seed\n            name: Seed\n            managed: true", "- id: seed\n            name: Seed\n            managed: true\n            context: 123\n          - id: seed\n            name: Second\n            managed: true\n            context: 456");
+        write_text(&temp.paths.dsh, &yaml).unwrap();
+        let models = dsh_disable_for_provider(&temp.paths, "seed", Some(MANAGED_PROVIDER)).unwrap();
+        assert_eq!(
+            models
+                .iter()
+                .filter(|m| m["id"] == "seed"
+                    && m["providerName"] == MANAGED_PROVIDER
+                    && m["disabled"] == true)
+                .count(),
+            1
+        );
+        assert_eq!(read_json_array(&temp.paths.dsh_disabled).unwrap().len(), 2);
+        assert!(models
+            .iter()
+            .any(|m| m["id"] == "other" && m["providerName"] == "my"));
+        dsh_enable_for_provider(&temp.paths, "seed", Some(MANAGED_PROVIDER)).unwrap();
+        let root = yaml_root(&temp.paths).unwrap();
+        let provider = dsh_providers(&root)
+            .unwrap()
+            .get(yaml_key(MANAGED_PROVIDER))
+            .unwrap();
+        let models = provider.get("models").unwrap().as_sequence().unwrap();
+        assert_eq!(models.len(), 2);
+        assert_eq!(
+            models[0].get("context").and_then(YamlValue::as_i64),
+            Some(123)
+        );
+        assert_eq!(
+            models[1].get("context").and_then(YamlValue::as_i64),
+            Some(456)
+        );
         assert!(read_json_array(&temp.paths.dsh_disabled)
             .unwrap()
             .is_empty());

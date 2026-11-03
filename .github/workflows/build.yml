@@ -222,6 +222,8 @@ jobs:
           else
             npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
           fi
+          test -f dist/companion/desktop.html
+          test -f dist/companion/desktop-settings.html
           echo "bundle after build:"
           find "$BUNDLE_ROOT" -type f | sort || true
           if [ "${{ matrix.bundles }}" = "nsis" ]; then
@@ -262,7 +264,8 @@ jobs:
                     ($0[kCGWindowLayer as String] as? NSNumber)?.intValue == 0
                   }
                   print("visible app windows: \(visible.count)")
-                ' || true
+                  if visible.isEmpty { exit(1) }
+                '
                 kill "$APP_PID" || true
               else
                 wait "$APP_PID" || echo "macOS app exited with status $?"
@@ -276,6 +279,7 @@ jobs:
                 kill "$LLDB_PID" 2>/dev/null || true
                 wait "$LLDB_PID" 2>/dev/null || true
                 cat "$RUNNER_TEMP/wb-switch-lldb.log"
+                exit 1
               fi
               cat "$RUNNER_TEMP/wb-switch-launch.log"
             fi
