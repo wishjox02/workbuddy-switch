@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { adminApiUrl, serviceDisplayText } from "@/lib/admin-backend";
 import type {
   AccountMeta,
   AccountRecord,
@@ -220,6 +221,25 @@ function currentOrigin(): string {
   return typeof origin === "string" ? origin : "";
 }
 
+function localApiToken(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const storageKey = "wb-switch.local-api-token.v1";
+    const existing = window.sessionStorage.getItem(storageKey) || "";
+    if (existing) return existing;
+    const token = new URLSearchParams(window.location.search).get("wb_token") || "";
+    if (token) {
+      window.sessionStorage.setItem(storageKey, token);
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete("wb_token");
+      window.history.replaceState({}, "", clean.toString());
+    }
+    return token;
+  } catch {
+    return "";
+  }
+}
+
 async function httpCall<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const route = ROUTES[cmd];
   if (!route) throw new Error(`webui 模式暂不支持该操作: ${cmd}`);
@@ -231,9 +251,10 @@ async function httpCall<T>(cmd: string, args?: Record<string, unknown>): Promise
       route.method === "GET"
         ? `${route.path}${queryString(args)}`
         : route.path;
+    const token = localApiToken();
     res = await fetch(url, {
       method: route.method,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: route.method === "POST" ? JSON.stringify(args ?? {}) : undefined,
     });
   } catch {
@@ -273,8 +294,9 @@ export function getStatus(variant?: WbVariant): Promise<AppStatus> {
 }
 
 /** 返回全部档位的账号，由调用方按 `variant` 过滤。 */
-export function getAccounts(): Promise<{ accounts: AccountMeta[] }> {
-  return call("get_accounts");
+export async function getAccounts(): Promise<{ accounts: AccountMeta[] }> {
+  const result = await call<{ accounts?: AccountMeta[] }>("get_accounts");
+  return { accounts: Array.isArray(result?.accounts) ? result.accounts : [] };
 }
 
 export function getCodebuddyCliStatus(): Promise<CodeBuddyCliStatus> {
@@ -995,8 +1017,36 @@ export function saveGithubConfig(config: GithubConfig): Promise<GithubConfig> {
   });
 }
 
-export function checkUpdate(proxy?: string, force?: boolean): Promise<UpdateInfo> {
-  return call("check_update", { proxy: proxy?.trim() || null, force: force ?? false });
+export async function checkUpdate(proxy?: string, force?: boolean): Promise<UpdateInfo> {
+  const args = { proxy: proxy?.trim() || null, force: force ?? false };
+  if (!isDesktop() || demoModeEnabled) return call("check_update", args);
+
+  // The rest of the desktop client already reaches the backend through WebView fetch.
+  // Use the same system-network path for release checks, then let Rust validate the
+  // response and update the shared tray/dialog snapshot.
+  try {
+    const response = await fetch(adminApiUrl("/client/releases"), {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(`更新服务返回 HTTP ${response.status}`);
+    if (!data || typeof data !== "object") throw new Error("后台版本数据无效");
+    return await call("apply_update_response", { data });
+  } catch (webviewError) {
+    // Keep the native path as a fallback for environments where WebView CORS or
+    // proxy policy blocks the request.
+    try {
+      return await call("check_update", args);
+    } catch {
+      throw webviewError;
+    }
+  }
+}
+
+export function configureUpdateBackend(url: string): Promise<boolean> {
+  if (isWebui() || demoModeEnabled) return Promise.resolve(false);
+  return call("configure_update_backend", { url });
 }
 
 export function relaunchApp(): Promise<void> {
@@ -1047,6 +1097,43 @@ export function updateDownload(): Promise<void> {
   return call<unknown>("update_download").then(() => undefined);
 }
 
+export async function downloadAndInstallManualUpdate(
+  url: string,
+  sha256: string,
+  version: string,
+  onProgress?: (percent: number | null) => void,
+): Promise<void> {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) throw new Error(`更新包下载失败（HTTP ${response.status}）`);
+  const total = Number(response.headers.get("content-length")) || 0;
+  if (!response.body) {
+    const bytes = Array.from(new Uint8Array(await response.arrayBuffer()));
+    onProgress?.(100);
+    await call("update_install_manual", { version, sha256, bytes });
+    return;
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const next = await reader.read();
+    if (next.done) break;
+    if (!next.value) continue;
+    chunks.push(next.value);
+    received += next.value.byteLength;
+    onProgress?.(total > 0 ? Math.min(100, Math.round((received / total) * 100)) : null);
+  }
+  const merged = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  onProgress?.(100);
+  const bytes = Array.from(merged);
+  await call("update_install_manual", { version, sha256, bytes });
+}
+
 /** 安装已下载的更新包并重启（用户点「重启以完成升级」时调用）。 */
 export function updateRestart(): Promise<void> {
   if (demoModeEnabled) return Promise.reject(new Error(DEMO_UNAVAILABLE_MESSAGE));
@@ -1074,9 +1161,9 @@ export function setLaunchAtLoginEnabled(enabled: boolean): Promise<boolean> {
 
 /** 把 Tauri command / HTTP 抛出的错误统一为 Error。 */
 export function asError(e: unknown): string {
-  if (typeof e === "string") return e;
-  if (e instanceof Error) return e.message;
-  return JSON.stringify(e ?? "未知错误");
+  if (typeof e === "string") return serviceDisplayText(e);
+  if (e instanceof Error) return serviceDisplayText(e.message);
+  return serviceDisplayText(JSON.stringify(e ?? "未知错误"));
 }
 
 // ---------------------------------------------------------------------------

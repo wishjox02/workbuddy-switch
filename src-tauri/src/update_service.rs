@@ -12,22 +12,19 @@
 //! 安装。Windows NSIS 安装器要求应用退出后才能完成安装，下载即安装等于强制自动重启；
 //! macOS 安装可能触发 `/Applications` 写授权，放在用户主动动作时语义才自然。
 
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::Serialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Runtime};
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 use wb_switch_core::modules::config::now_secs;
 use wb_switch_core::modules::update;
-
-/// 后台首次检查延迟：启动 15 秒后（替代前端 30 分钟轮询的首屏延迟）。
-pub const FIRST_CHECK_DELAY: Duration = Duration::from_secs(15);
-/// 后台检查间隔（30 分钟）。
-pub const CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 const BUSY_MESSAGE: &str = "更新任务正在进行中，请稍候";
 const NO_PACKAGE_MESSAGE: &str = "没有可安装的更新包，请先下载更新包";
@@ -67,6 +64,8 @@ pub struct UpdateSnapshot {
     pub message: Option<String>,
     /// 最近一次检查完成时刻（秒）。
     pub checked_at: Option<i64>,
+    pub manual_url: Option<String>,
+    pub manual_sha256: Option<String>,
 }
 
 impl UpdateSnapshot {
@@ -77,6 +76,8 @@ impl UpdateSnapshot {
             percent: None,
             message: None,
             checked_at: None,
+            manual_url: None,
+            manual_sha256: None,
         }
     }
 }
@@ -90,6 +91,9 @@ struct DownloadedPackage {
 }
 
 static SNAPSHOT: OnceLock<Mutex<UpdateSnapshot>> = OnceLock::new();
+static MANIFEST: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static BACKEND_OVERRIDE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static BACKEND_GENERATION: AtomicU64 = AtomicU64::new(0);
 static PACKAGE: OnceLock<Mutex<Option<DownloadedPackage>>> = OnceLock::new();
 /// 「检查 / 下载 / 安装」共用互斥：任一任务在跑时重复点击直接拒绝。
 static BUSY: AtomicBool = AtomicBool::new(false);
@@ -97,6 +101,236 @@ static BUSY: AtomicBool = AtomicBool::new(false);
 static MENU_PROGRESS_BUCKET: AtomicU8 = AtomicU8::new(u8::MAX);
 /// 本轮下载是否已打过「进度开始上报」日志（排障用，一次下载只打一行）。
 static PROGRESS_REPORTED: AtomicBool = AtomicBool::new(false);
+
+const DEFAULT_BACKEND: &str = "https://woai.info/admin/api";
+
+fn normalize_backend(value: &str) -> Result<tauri::Url, String> {
+    let mut url = tauri::Url::parse(value.trim()).map_err(|_| "后台地址无效")?;
+    let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "::1"));
+    if !(url.scheme() == "https" || (local && url.scheme() == "http"))
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("后台地址须使用 HTTPS".into());
+    }
+    let path = url.path().trim_end_matches('/').to_string();
+    let path = if path.ends_with("/api") {
+        path
+    } else {
+        format!("{path}/api")
+    };
+    url.set_path(&path);
+    Ok(url)
+}
+
+fn backend_file() -> std::path::PathBuf {
+    wb_switch_core::modules::config::store_dir().join("update_backend_url.txt")
+}
+
+pub fn configure_backend(value: &str) -> Result<bool, String> {
+    let parsed = normalize_backend(value);
+    let url = parsed
+        .as_ref()
+        .map(|u| u.to_string())
+        .unwrap_or_else(|_| "INVALID".into());
+    let path = backend_file();
+    let changed = std::fs::read_to_string(&path).ok().as_deref() != Some(url.as_str());
+    if changed {
+        BACKEND_GENERATION.fetch_add(1, Ordering::AcqRel);
+        *BACKEND_OVERRIDE
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = Some("INVALID".into());
+        *MANIFEST
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
+        *package_cell().lock().unwrap_or_else(|e| e.into_inner()) = None;
+        with_snapshot(|s| {
+            *s = UpdateSnapshot::idle();
+            s.phase = UpdatePhase::Error;
+            s.message = Some("后台更新地址保存失败".into());
+        });
+        std::fs::create_dir_all(path.parent().ok_or("后台配置路径无效")?)
+            .map_err(|e| format!("后台更新地址保存失败：{e}"))?;
+        std::fs::write(path, &url).map_err(|e| format!("后台更新地址保存失败：{e}"))?;
+        with_snapshot(|s| *s = UpdateSnapshot::idle());
+    }
+    *BACKEND_OVERRIDE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(url);
+    if let Err(error) = &parsed {
+        with_snapshot(|s| {
+            s.phase = UpdatePhase::Error;
+            s.message = Some(error.clone());
+            s.latest = None;
+            s.manual_url = None;
+            s.manual_sha256 = None;
+        });
+    }
+    parsed.map(|_| changed)
+}
+
+fn configured_backend() -> Result<tauri::Url, String> {
+    let saved = BACKEND_OVERRIDE
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .or_else(|| std::fs::read_to_string(backend_file()).ok());
+    normalize_backend(saved.as_deref().unwrap_or(DEFAULT_BACKEND))
+}
+
+fn version_parts(value: &str) -> Option<Vec<u64>> {
+    let parts: Vec<_> = value.trim().trim_start_matches('v').split('.').collect();
+    if parts.len() != 3
+        || parts
+            .iter()
+            .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return None;
+    }
+    parts.iter().map(|part| part.parse().ok()).collect()
+}
+
+fn asset_matches(platform: &str, arch: &str, filename: &str) -> bool {
+    let name = filename.to_ascii_lowercase();
+    match (platform, arch) {
+        ("windows", "x86_64") => !name.contains("arm64") && !name.contains("aarch64"),
+        ("macos", "aarch64") => {
+            name.contains("arm64") || name.contains("aarch64") || name.contains("universal")
+        }
+        ("macos", "x86_64") => {
+            name.contains("x64")
+                || name.contains("x86_64")
+                || name.contains("intel")
+                || name.contains("universal")
+        }
+        _ => false,
+    }
+}
+
+fn installed_distribution() -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        return std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.join("uninstall.exe").is_file()))
+            .unwrap_or(false);
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::current_exe()
+            .ok()
+            .map(|p| p.starts_with("/Applications"))
+            .unwrap_or(false);
+    }
+    #[allow(unreachable_code)]
+    false
+}
+
+fn choose_release(
+    data: &Value,
+    base: &tauri::Url,
+    platform: &str,
+    arch: &str,
+    installed: bool,
+) -> Result<Value, String> {
+    let releases = data
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or("后台版本数据无效")?;
+    if releases.is_empty() {
+        return Err("后台尚未发布版本".into());
+    }
+    let current = version_parts(update::APP_VERSION).ok_or("当前版本号无效")?;
+    let mut best: Option<(Vec<u64>, Value)> = None;
+    let mut newer_without_package = false;
+    let mut saw_stable = false;
+    for release in releases {
+        if release.get("enabled").and_then(Value::as_bool) != Some(true)
+            || release
+                .get("channel")
+                .and_then(Value::as_str)
+                .unwrap_or("stable")
+                != "stable"
+        {
+            continue;
+        }
+        let version = release.get("version").and_then(Value::as_str).unwrap_or("");
+        let Some(parts) = version_parts(version) else {
+            continue;
+        };
+        saw_stable = true;
+        if parts > current {
+            newer_without_package = true;
+        }
+        if parts <= current || best.as_ref().is_some_and(|(p, _)| parts <= *p) {
+            continue;
+        }
+        let Some(file) = release.get("files").and_then(|f| f.get(platform)) else {
+            continue;
+        };
+        if file.get("downloadEnabled").and_then(Value::as_bool) != Some(true)
+            || !asset_matches(
+                platform,
+                arch,
+                file.get("name").and_then(Value::as_str).unwrap_or(""),
+            )
+        {
+            continue;
+        }
+        let Some(storage) = file.get("storageName").and_then(Value::as_str).filter(|s| {
+            !s.is_empty()
+                && s.bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_' | b'.'))
+                && *s != "."
+                && *s != ".."
+        }) else {
+            continue;
+        };
+        let Some(checksum) = file.get("sha256").and_then(Value::as_str).filter(|value| {
+            value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }) else {
+            continue;
+        };
+        let mut download = base.clone();
+        download.set_path(&format!(
+            "{}/client/releases/files/{storage}",
+            base.path().trim_end_matches('/')
+        ));
+        let manifest = release
+            .get("manifestUrl")
+            .and_then(Value::as_str)
+            .and_then(|s| tauri::Url::parse(s).ok())
+            .filter(|u| {
+                u.scheme() == "https"
+                    && u.origin() == base.origin()
+                    && u.username().is_empty()
+                    && u.password().is_none()
+            });
+        let signed = installed && manifest.is_some();
+        best = Some((
+            parts,
+            json!({"ok": true, "current": update::APP_VERSION, "latest": version.trim_start_matches('v'), "hasUpdate": true, "releaseUrl": download.as_str(), "manualUrl": if signed { None } else { Some(download.as_str()) }, "manualSha256": if signed { None } else { Some(checksum.to_ascii_lowercase()) }, "manifestUrl": if signed { manifest.map(|u| u.to_string()) } else { None }, "checkedAt": now_secs()}),
+        ));
+    }
+    if let Some((_, value)) = best {
+        return Ok(value);
+    }
+    if newer_without_package {
+        return Err("后台有新版本，暂无适配此设备的更新包".into());
+    }
+    if !saw_stable {
+        return Err("后台暂无可用的正式版本".into());
+    }
+    Ok(
+        json!({"ok":true, "current":update::APP_VERSION, "latest":update::APP_VERSION, "hasUpdate":false, "checkedAt":now_secs()}),
+    )
+}
 
 // ---------------------------------------------------------------------------
 // 互斥
@@ -174,21 +408,10 @@ fn apply_check_result(result: &Value) -> UpdateSnapshot {
         }
         snapshot.percent = None;
         if result.get("ok").and_then(Value::as_bool) != Some(true) {
-            // 已有明确目标版本时（Available 被后台复查带进 Checking、或下载失败后
-            // 再检查），失败不得清掉升级入口：否则 30 分钟后台检查一旦网络失败，
-            // 托盘会从「升级到 vX」变成「检查更新失败」。
-            if snapshot.latest.is_some()
-                && matches!(
-                    snapshot.phase,
-                    UpdatePhase::Checking | UpdatePhase::Available
-                )
-            {
-                snapshot.phase = UpdatePhase::Available;
-                snapshot.message = None;
-                return snapshot.clone();
-            }
             snapshot.phase = UpdatePhase::Error;
             snapshot.latest = None;
+            snapshot.manual_url = None;
+            snapshot.manual_sha256 = None;
             snapshot.message = result
                 .get("message")
                 .and_then(Value::as_str)
@@ -210,6 +433,22 @@ fn apply_check_result(result: &Value) -> UpdateSnapshot {
             UpdatePhase::UpToDate
         };
         snapshot.latest = has_update.then_some(latest);
+        snapshot.manual_url = if has_update {
+            result
+                .get("manualUrl")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        } else {
+            None
+        };
+        snapshot.manual_sha256 = if has_update {
+            result
+                .get("manualSha256")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        } else {
+            None
+        };
         snapshot.message = None;
         snapshot.checked_at = result
             .get("checkedAt")
@@ -288,7 +527,7 @@ fn should_rebuild_menu(percent: u8) -> bool {
 /// `check_update` 完全同形的结果（前端展示与 webui 侧契约不变）。
 ///
 /// 已有更新任务在跑时直接返回忙碌错误，不并发触发第二次检查。
-pub async fn check<R: Runtime>(app: &AppHandle<R>, proxy: Option<&str>, force: bool) -> Value {
+pub async fn check<R: Runtime>(app: &AppHandle<R>, _proxy: Option<&str>, force: bool) -> Value {
     let Some(_busy) = BusyGuard::acquire() else {
         // 互斥拒绝不写日志到 stderr 之外：托盘文案已表达同一件事。
         eprintln!("[更新] 已有任务在跑，跳过本次检查");
@@ -302,7 +541,99 @@ pub async fn check<R: Runtime>(app: &AppHandle<R>, proxy: Option<&str>, force: b
     };
     eprintln!("[更新] 检查更新（force={force}）");
     set_phase(app, begin_check());
-    let result = update::update_check(proxy, force).await;
+    let generation = BACKEND_GENERATION.load(Ordering::Acquire);
+    let result = match async {
+        let base = configured_backend()?;
+        let mut url = base.clone();
+        url.set_path(&format!(
+            "{}/client/releases",
+            base.path().trim_end_matches('/')
+        ));
+        let mut client_builder = reqwest::Client::builder().timeout(Duration::from_secs(15));
+        if let Some(proxy) = configured_proxy() {
+            client_builder = client_builder
+                .proxy(reqwest::Proxy::all(&proxy).map_err(|error| format!("更新代理地址无效：{error}"))?);
+        }
+        let response = client_builder
+            .build()
+            .map_err(|e| e.to_string())?
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .error_for_status()
+            .map_err(|e| e.to_string())?;
+        let data: Value = response.json().await.map_err(|e| e.to_string())?;
+        if data.get("ok").and_then(Value::as_bool) != Some(true) {
+            return Err("后台版本查询失败".to_string());
+        }
+        choose_release(
+            &data,
+            &base,
+            std::env::consts::OS,
+            std::env::consts::ARCH,
+            installed_distribution(),
+        )
+    }
+    .await
+    {
+        Ok(value) => value,
+        Err(error) => json!({"ok": false, "error": error, "message": error}),
+    };
+    if BACKEND_GENERATION.load(Ordering::Acquire) != generation {
+        return json!({"ok":false,"error":"后台地址已更改，请重新检查"});
+    }
+    if result.get("ok").and_then(Value::as_bool) == Some(true) {
+        *MANIFEST
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = result
+            .get("manifestUrl")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
+    publish_check_result(app, result)
+}
+
+/// 处理前端 WebView 已经拿到的版本响应。
+///
+/// Windows 上 WebView 使用系统代理链路，而 Rust 的 reqwest 链路可能被本机网络设备
+/// 在 TLS 握手阶段重置。前端请求成功后仍交回这里做平台、版本、文件名和校验值校验，
+/// 不信任前端自行拼出的下载地址。
+pub fn apply_external_check<R: Runtime>(app: &AppHandle<R>, data: Value) -> Value {
+    let result = match configured_backend() {
+        Ok(base) => {
+            if data.get("ok").and_then(Value::as_bool) != Some(true) {
+                Err("后台版本查询失败".to_string())
+            } else {
+                choose_release(
+                    &data,
+                    &base,
+                    std::env::consts::OS,
+                    std::env::consts::ARCH,
+                    installed_distribution(),
+                )
+            }
+        }
+        Err(error) => Err(error),
+    };
+    let result = match result {
+        Ok(value) => value,
+        Err(error) => json!({"ok": false, "error": error, "message": error}),
+    };
+    publish_check_result(app, result)
+}
+
+fn publish_check_result<R: Runtime>(app: &AppHandle<R>, result: Value) -> Value {
+    if result.get("ok").and_then(Value::as_bool) == Some(true) {
+        *MANIFEST
+            .get_or_init(|| Mutex::new(None))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = result
+            .get("manifestUrl")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+    }
     let snapshot = set_phase(app, apply_check_result(&result));
     eprintln!(
         "[更新] 检查结果：{:?} latest={:?}",
@@ -319,15 +650,26 @@ pub fn start_download<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     if crate::is_screenshot_demo() {
         return Err(DEMO_DOWNLOAD_MESSAGE.to_string());
     }
+    if let Some(url) = snapshot().manual_url {
+        return app
+            .opener()
+            .open_url(url, None::<&str>)
+            .map_err(|e| e.to_string());
+    }
     let Some(busy) = BusyGuard::acquire() else {
         eprintln!("[更新] 已有任务在跑，跳过本次下载");
         return Err(BUSY_MESSAGE.to_string());
     };
     eprintln!("[更新] 启动下载任务");
     let app = app.clone();
+    let generation = BACKEND_GENERATION.load(Ordering::Acquire);
     tauri::async_runtime::spawn(async move {
         let _busy = busy;
-        match download_package(&app).await {
+        let result = download_package(&app).await;
+        if BACKEND_GENERATION.load(Ordering::Acquire) != generation {
+            return;
+        }
+        match result {
             // 下载完成：包先暂存，等用户点「重启以完成升级」时才安装。
             Ok(Some(package)) => {
                 let version = package.version.clone();
@@ -358,6 +700,58 @@ pub fn start_download<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
             }
         }
     });
+    Ok(())
+}
+
+/// 接收 WebView 下载的安装包，校验哈希后启动安装器并退出当前进程。
+pub fn install_manual_package<R: Runtime>(
+    app: &AppHandle<R>,
+    version: &str,
+    sha256: &str,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    let expected = sha256.trim().to_ascii_lowercase();
+    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("更新包校验值无效".into());
+    }
+    let actual = format!("{:x}", Sha256::digest(&bytes));
+    if actual != expected {
+        return Err("更新包校验失败".into());
+    }
+    let safe_version = version
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-'))
+        .collect::<String>();
+    let path = std::env::temp_dir().join(format!("workbuddy-update-{safe_version}.exe"));
+    std::fs::write(&path, bytes).map_err(|e| format!("保存更新包失败：{e}"))?;
+    #[cfg(target_os = "windows")]
+    {
+        let installed_exe = std::env::var_os("LOCALAPPDATA")
+            .map(std::path::PathBuf::from)
+            .ok_or("无法定位安装目录")?
+            .join("小玉米")
+            .join("小玉米.exe");
+        let helper = std::env::temp_dir().join(format!(
+            "workbuddy-update-launcher-{}.exe",
+            std::process::id()
+        ));
+        let current_exe = std::env::current_exe().map_err(|e| format!("无法定位当前程序：{e}"))?;
+        std::fs::copy(&current_exe, &helper)
+            .map_err(|e| format!("创建更新启动助手失败：{e}"))?;
+        std::process::Command::new(&helper)
+            .arg("--wb-update-wait")
+            .arg(&path)
+            .arg(&installed_exe)
+            .spawn()
+            .map_err(|e| format!("启动更新助手失败：{e}"))?;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new(&path)
+            .spawn()
+            .map_err(|e| format!("启动安装程序失败：{e}"))?;
+    }
+    app.exit(0);
     Ok(())
 }
 
@@ -415,20 +809,6 @@ pub async fn restart<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
     }
 }
 
-/// 后台定时检查：首次延迟 [`FIRST_CHECK_DELAY`]，之后每 [`CHECK_INTERVAL`] 一次。
-///
-/// 常驻循环随进程存活，轻量模式（WebView 销毁）与主窗口关闭时同样在跑；
-/// 未带 force 走 core 的 6 小时缓存，因此多数轮次不发网络请求。
-pub fn spawn_periodic_check(app: AppHandle) {
-    tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(FIRST_CHECK_DELAY).await;
-        loop {
-            let _ = check(&app, None, false).await;
-            tokio::time::sleep(CHECK_INTERVAL).await;
-        }
-    });
-}
-
 // ---------------------------------------------------------------------------
 // 下载 / 安装内部实现
 // ---------------------------------------------------------------------------
@@ -437,7 +817,19 @@ pub fn spawn_periodic_check(app: AppHandle) {
 async fn download_package<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Option<DownloadedPackage>, String> {
-    let builder = app.updater_builder();
+    let manifest = MANIFEST
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
+        .ok_or("后台未提供签名更新清单")?;
+    let expected = snapshot().latest.ok_or("尚未选择更新版本")?;
+    let builder = app
+        .updater_builder()
+        .endpoints(vec![
+            tauri::Url::parse(&manifest).map_err(|e| e.to_string())?
+        ])
+        .map_err(|e| e.to_string())?;
     let builder = match configured_proxy() {
         Some(proxy) => builder.proxy(
             tauri::Url::parse(&proxy).map_err(|error| format!("更新代理地址无效：{error}"))?,
@@ -456,6 +848,9 @@ async fn download_package<R: Runtime>(
     };
 
     let version = update.version.clone();
+    if version_parts(&version) != version_parts(&expected) {
+        return Err("签名更新版本与后台版本不一致".into());
+    }
     set_phase(app, begin_download(&version));
     let progress_app = app.clone();
     let mut downloaded: u64 = 0;
@@ -602,6 +997,87 @@ mod tests {
         BUSY.store(false, Ordering::Release);
     }
 
+    fn test_release(version: &str, platform: &str, name: &str, enabled: bool) -> Value {
+        let checksum = "a".repeat(64);
+        json!({"version":version, "channel":"stable", "enabled":true, "files":{platform:{"name":name, "storageName":"safe-123.exe", "sha256":checksum, "downloadEnabled":enabled}}})
+    }
+
+    #[test]
+    fn backend_release_selection_uses_version_and_prefix() {
+        let base = normalize_backend("https://woai.info/admin/api").unwrap();
+        let releases = json!({"data":[test_release("9.0.0","windows","setup_x64.exe",true), test_release("10.0.0","windows","setup_x64.exe",true)]});
+        let value = choose_release(&releases, &base, "windows", "x86_64", false).unwrap();
+        assert_eq!(value["latest"], "10.0.0");
+        assert_eq!(
+            value["manualUrl"],
+            "https://woai.info/admin/api/client/releases/files/safe-123.exe"
+        );
+    }
+
+    #[test]
+    fn missing_or_disabled_package_is_not_latest() {
+        let base = normalize_backend(DEFAULT_BACKEND).unwrap();
+        assert!(choose_release(&json!({"data":[]}), &base, "windows", "x86_64", false).is_err());
+        let data = json!({"data":[test_release("9.0.0","windows","setup.exe",false)]});
+        assert!(choose_release(&data, &base, "windows", "x86_64", false)
+            .unwrap_err()
+            .contains("暂无适配"));
+        let old = json!({"data":[test_release("0.0.1","windows","setup.exe",true)]});
+        assert_eq!(
+            choose_release(&old, &base, "windows", "x86_64", false).unwrap()["hasUpdate"],
+            false
+        );
+    }
+
+    #[test]
+    fn mac_packages_require_matching_architecture() {
+        let base = normalize_backend(DEFAULT_BACKEND).unwrap();
+        let data = json!({"data":[test_release("9.0.0","macos","app_aarch64.dmg",true)]});
+        assert!(choose_release(&data, &base, "macos", "x86_64", false).is_err());
+        assert!(choose_release(&data, &base, "macos", "aarch64", false).is_ok());
+    }
+
+    #[test]
+    fn portable_and_untrusted_manifests_use_manual_download() {
+        let base = normalize_backend(DEFAULT_BACKEND).unwrap();
+        let mut release = test_release("9.0.0", "windows", "setup.exe", true);
+        release["manifestUrl"] = json!("https://woai.info/admin/api/manifest.json");
+        let data = json!({"data":[release]});
+        let portable = choose_release(&data, &base, "windows", "x86_64", false).unwrap();
+        assert!(portable["manualUrl"].is_string());
+        let installed = choose_release(&data, &base, "windows", "x86_64", true).unwrap();
+        assert!(installed["manualUrl"].is_null());
+        assert!(installed["manifestUrl"].is_string());
+        let mut untrusted = data.clone();
+        untrusted["data"][0]["manifestUrl"] = json!("https://example.com/manifest.json");
+        assert!(
+            choose_release(&untrusted, &base, "windows", "x86_64", true).unwrap()["manualUrl"]
+                .is_string()
+        );
+    }
+
+    #[test]
+    fn backend_and_download_path_validation() {
+        assert!(normalize_backend("http://example.com").is_err());
+        assert!(normalize_backend("https://user:password@example.com/api").is_err());
+        assert_eq!(
+            normalize_backend("http://127.0.0.1:57900")
+                .unwrap()
+                .as_str(),
+            "http://127.0.0.1:57900/api"
+        );
+        let mut bad = test_release("9.0.0", "windows", "setup.exe", true);
+        bad["files"]["windows"]["storageName"] = json!("../../escape");
+        assert!(choose_release(
+            &json!({"data":[bad]}),
+            &normalize_backend(DEFAULT_BACKEND).unwrap(),
+            "windows",
+            "x86_64",
+            false
+        )
+        .is_err());
+    }
+
     #[test]
     fn phases_flow_idle_available_downloading_ready_to_restart() {
         let _guard = lock();
@@ -659,9 +1135,8 @@ mod tests {
         assert_eq!(snapshot.latest, None);
     }
 
-    /// 已有目标版本时，复查失败必须回到 Available，不能清掉「升级到 vX」入口。
     #[test]
-    fn failed_recheck_keeps_available_target() {
+    fn failed_recheck_clears_stale_available_target() {
         let _guard = lock();
         reset();
         apply_check_result(&json!({
@@ -676,9 +1151,9 @@ mod tests {
             "error": "网络请求失败",
             "message": "网络请求失败（code=-1）",
         }));
-        assert_eq!(snapshot.phase, UpdatePhase::Available);
-        assert_eq!(snapshot.latest.as_deref(), Some("9.9.9"));
-        assert_eq!(snapshot.message, None);
+        assert_eq!(snapshot.phase, UpdatePhase::Error);
+        assert_eq!(snapshot.latest, None);
+        assert_eq!(snapshot.message.as_deref(), Some("网络请求失败（code=-1）"));
     }
 
     #[test]
@@ -798,6 +1273,8 @@ mod tests {
     /// 事件 / 命令负载的字段契约（前端 `UpdateSnapshot` 按此解析）。
     #[test]
     fn snapshot_serializes_camel_case_contract() {
+        let _guard = lock();
+        reset();
         let value = serde_json::to_value(UpdateSnapshot::idle()).unwrap();
         assert_eq!(value["phase"], json!("idle"));
         assert_eq!(value["latest"], json!(null));

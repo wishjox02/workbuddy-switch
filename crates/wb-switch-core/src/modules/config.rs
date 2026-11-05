@@ -3,10 +3,14 @@
 use chrono::{Local, TimeZone};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
+use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(unix)]
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 use crate::modules::variant::WbVariant;
 
@@ -913,14 +917,36 @@ pub fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
     let tmp = path.with_file_name(format!("{file_name}.tmp-{}", uuid::Uuid::new_v4().simple()));
-    if let Err(e) = std::fs::write(&tmp, content) {
+    #[cfg(unix)]
+    let mode = fs::metadata(path)
+        .ok()
+        .map(|metadata| metadata.permissions().mode() & 0o700)
+        .map(|mode| mode | 0o600)
+        .unwrap_or(0o600);
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(mode);
+    let mut file = match options.open(&tmp) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("[atomic] write tmp FAILED: {e}");
+            return Err(e);
+        }
+    };
+    #[cfg(unix)]
+    file.set_permissions(fs::Permissions::from_mode(mode))?;
+    use std::io::Write;
+    if let Err(e) = file.write_all(content.as_bytes()) {
         eprintln!("[atomic] write tmp FAILED: {e}");
+        let _ = fs::remove_file(&tmp);
         return Err(e);
     }
-    if let Err(e) = std::fs::rename(&tmp, path) {
+    drop(file);
+    if let Err(e) = fs::rename(&tmp, path) {
         eprintln!("[atomic] rename FAILED: {e}");
         // rename 失败时清理临时文件，避免在目标目录残留 `<name>.tmp-*`。
-        let _ = std::fs::remove_file(&tmp);
+        let _ = fs::remove_file(&tmp);
         return Err(e);
     }
     Ok(())
@@ -1137,6 +1163,20 @@ pub async fn http_request_raw(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_keeps_sensitive_files_private() {
+        let path =
+            std::env::temp_dir().join(format!("wb-switch-permissions-{}", uuid::Uuid::new_v4()));
+        fs::write(&path, "old").unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        atomic_write(&path, "new").unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o077, 0);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "new");
+        let _ = fs::remove_file(path);
+    }
 
     /// 回归 issue #94：网关 401 返回的整页 HTML 要归一化为可读信息，
     /// 不能把 `<html>…` 原样塞进通知与界面卡片。

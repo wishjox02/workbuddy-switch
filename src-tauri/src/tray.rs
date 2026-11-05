@@ -4,26 +4,27 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use serde_json::Value;
-use tauri::menu::{CheckMenuItem, Menu, MenuBuilder, MenuItem};
+use tauri::menu::{Menu, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
     AppHandle, Emitter, Manager, RunEvent, Runtime, WebviewWindowBuilder, Window, WindowEvent,
 };
 use tauri_plugin_notification::NotificationExt;
-use tauri_plugin_opener::OpenerExt;
-use wb_switch_core::modules::{checkin, update};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
+use wb_switch_core::modules::checkin;
 
 use crate::update_service::{UpdatePhase, UpdateSnapshot};
 
 const TRAY_ID: &str = "main-menu-bar";
 const MAIN_WINDOW_LABEL: &str = "main";
-const DEFAULT_TOOLTIP: &str = "workbuddy-switch";
+const DEFAULT_TOOLTIP: &str = "小玉米";
 const CHECKIN_TOOLTIP_RESTORE_SECS: u64 = 8;
 
 /// 系统自启注册的启动参数：仅携带该精确参数的启动进入静默托盘模式。
 pub const SILENT_STARTUP_ARG: &str = "--hidden";
 
 static LIGHTWEIGHT_MODE: AtomicBool = AtomicBool::new(false);
+static CLOSE_PROMPT_OPEN: AtomicBool = AtomicBool::new(false);
 static CHECKIN_BUSY: AtomicBool = AtomicBool::new(false);
 static TOOLTIP_GENERATION: AtomicU64 = AtomicU64::new(0);
 #[cfg(target_os = "macos")]
@@ -32,7 +33,7 @@ static DOCK_ICON_GENERATION: AtomicU64 = AtomicU64::new(0);
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
     let menu = build_tray_menu(app)?;
 
-    TrayIconBuilder::with_id(TRAY_ID)
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(tray_icon())
         // 模板图标（系统按明暗自适应着色）是 macOS 独有的语义；
         // Windows/Linux 会忽略该标记并直接贴原始像素，用单色剪影会显示成纯白方块。
@@ -56,18 +57,19 @@ pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "open-main-window" => show_main_window(app),
-            "open-github" => open_github(app),
             "checkin-all" => start_checkin_all(app),
             "check-update" => start_update_check(app),
             "update-now" => start_update_download(app),
             "update-restart" => start_update_restart(app),
-            "lightweight-mode" => toggle_lightweight(app),
-            "companion-toggle" => crate::companion::toggle_rail(app),
-            "companion-settings" => crate::companion::open_settings_from_tray(app),
             "quit-app" => app.exit(0),
             _ => {}
         })
         .build(app)?;
+    // Keep the icon visible after startup and after a tray menu refresh. Windows
+    // may still place it inside the notification overflow area; macOS keeps it
+    // in the menu bar using the template icon configured above.
+    tray.set_visible(true)?;
+    tray.set_icon(Some(tray_icon()))?;
 
     #[cfg(windows)]
     watch_taskbar_theme(app.handle().clone());
@@ -81,10 +83,43 @@ pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
     }
     if let WindowEvent::CloseRequested { api, .. } = event {
         api.prevent_close();
-        let _ = window.hide();
-        apply_dock_visible(window.app_handle(), false);
-        emit_main_window_visible(window.app_handle(), false);
+        if CLOSE_PROMPT_OPEN.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        let app = window.app_handle().clone();
+        let window = window.clone();
+        window
+            .dialog()
+            .message("请选择关闭方式")
+            .title("小玉米")
+            .buttons(MessageDialogButtons::YesNoCancelCustom(
+                "退出应用".into(),
+                "最小化到托盘".into(),
+                "取消".into(),
+            ))
+            .parent(&window)
+            .show_with_result(move |result| {
+                CLOSE_PROMPT_OPEN.store(false, Ordering::Release);
+                let exit = matches!(&result, MessageDialogResult::Yes)
+                    || matches!(&result, MessageDialogResult::Custom(label) if label == "退出应用");
+                let minimize = matches!(&result, MessageDialogResult::No)
+                    || matches!(&result, MessageDialogResult::Custom(label) if label == "最小化到托盘");
+                if exit {
+                    // Explicit app.exit carries a non-None exit code, so on_run_event
+                    // will allow the process and tray icon to terminate completely.
+                    app.exit(0);
+                } else if minimize {
+                    hide_main_window(&window);
+                }
+            });
     }
+}
+
+fn hide_main_window<R: Runtime>(window: &Window<R>) {
+    let _ = window.hide();
+    #[cfg(not(target_os = "macos"))]
+    apply_dock_visible(window.app_handle(), false);
+    emit_main_window_visible(window.app_handle(), false);
 }
 
 /// 判断本次启动是否携带精确的 `--hidden` 参数（系统自启触发）。
@@ -307,14 +342,6 @@ fn app_bundle_path_from_exe(exe: &std::path::Path) -> Option<&std::path::Path> {
     (bundle.extension()?.to_str()? == "app").then_some(bundle)
 }
 
-fn toggle_lightweight<R: Runtime>(app: &AppHandle<R>) {
-    if LIGHTWEIGHT_MODE.load(Ordering::Acquire) {
-        exit_lightweight(app);
-    } else {
-        enter_lightweight(app);
-    }
-}
-
 fn enter_lightweight<R: Runtime>(app: &AppHandle<R>) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         if window.destroy().is_err() {
@@ -363,15 +390,6 @@ fn exit_lightweight<R: Runtime>(app: &AppHandle<R>) {
     emit_main_window_visible(app, true);
     LIGHTWEIGHT_MODE.store(false, Ordering::Release);
     refresh_tray_menu(app);
-}
-
-fn open_github<R: Runtime>(app: &AppHandle<R>) {
-    let url = format!(
-        "https://github.com/{}/{}",
-        update::GITHUB_OWNER,
-        update::GITHUB_REPO
-    );
-    let _ = app.opener().open_url(url, None::<&str>);
 }
 
 struct CheckinBusyGuard<R: Runtime> {
@@ -459,7 +477,7 @@ fn notify_checkin<R: Runtime>(app: &AppHandle<R>, body: &str) {
     let _ = app
         .notification()
         .builder()
-        .title("workbuddy-switch")
+        .title("小玉米")
         .body(body)
         .show();
 }
@@ -473,7 +491,7 @@ pub fn notify_rotate_deferred<R: Runtime>(app: &AppHandle<R>, notify: &Value) {
     let title = notify
         .get("title")
         .and_then(Value::as_str)
-        .unwrap_or("workbuddy-switch");
+        .unwrap_or("小玉米");
     let Some(body) = notify.get("body").and_then(Value::as_str) else {
         return;
     };
@@ -618,7 +636,6 @@ fn update_menu_spec(snapshot: &UpdateSnapshot) -> (UpdateMenuAction, String, boo
 
 fn build_tray_menu<R: Runtime, M: Manager<R>>(app: &M) -> tauri::Result<Menu<R>> {
     let open_item = MenuItem::with_id(app, "open-main-window", "打开主界面", true, None::<&str>)?;
-    let github_item = MenuItem::with_id(app, "open-github", "打开 GitHub", true, None::<&str>)?;
     // 档位区分在 core 判定：无签到活动的档位（国际版）不参与「待签到」集合，
     // 否则这些账号永远不会产生签到日志，托盘会一直显示「可签到」。
     let checked_in = checkin::all_accounts_checked_in_today();
@@ -645,43 +662,13 @@ fn build_tray_menu<R: Runtime, M: Manager<R>>(app: &M) -> tauri::Result<Menu<R>>
         update_enabled,
         None::<&str>,
     )?;
-    let lightweight_item = CheckMenuItem::with_id(
-        app,
-        "lightweight-mode",
-        "轻量模式",
-        true,
-        LIGHTWEIGHT_MODE.load(Ordering::Acquire),
-        None::<&str>,
-    )?;
-    let companion_enabled =
-        !crate::is_screenshot_demo() && agent_studio_desktop::is_enabled(app.app_handle());
-    let companion_toggle = MenuItem::with_id(
-        app,
-        "companion-toggle",
-        "显示 / 隐藏悬浮窗",
-        companion_enabled,
-        None::<&str>,
-    )?;
-    let companion_settings = MenuItem::with_id(
-        app,
-        "companion-settings",
-        "悬浮窗设置",
-        companion_enabled,
-        None::<&str>,
-    )?;
     let quit_item = MenuItem::with_id(app, "quit-app", "退出应用", true, None::<&str>)?;
 
     MenuBuilder::new(app)
         .item(&open_item)
-        .item(&github_item)
         .item(&checkin_item)
         .separator()
         .item(&update_item)
-        .separator()
-        .item(&lightweight_item)
-        .separator()
-        .item(&companion_toggle)
-        .item(&companion_settings)
         .separator()
         .item(&quit_item)
         .build()
@@ -702,11 +689,10 @@ fn tray_icon() -> tauri::image::Image<'static> {
 /// Windows 托盘图标：按「Windows 模式」在黑白猫之间选择，读不到主题就用彩色素材兜底。
 #[cfg(windows)]
 fn tray_icon() -> tauri::image::Image<'static> {
-    match tray_icon_variant(taskbar_uses_light_theme()) {
-        TrayIconVariant::MonoBlack => mono_black_icon(),
-        TrayIconVariant::MonoWhite => mono_white_icon(),
-        TrayIconVariant::Color => color_icon(),
-    }
+    // A colored icon remains visible in both light and dark notification areas;
+    // Windows may hide a monochrome icon when the taskbar theme changes before
+    // the registry watcher receives its first notification.
+    color_icon()
 }
 
 /// Linux 托盘图标：彩色应用图标。
@@ -901,6 +887,8 @@ fn format_checkin_tooltip(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(windows)]
+    use super::taskbar_uses_light_theme;
     use super::{
         format_checkin_tooltip, is_silent_startup, should_activate_on_second_launch,
         should_keep_tray_alive, should_wake_main_window, tray_icon, tray_icon_variant, MouseButton,
@@ -1230,6 +1218,8 @@ mod tests {
                 percent,
                 message: None,
                 checked_at: None,
+                manual_url: None,
+                manual_sha256: None,
             };
 
         assert_eq!(

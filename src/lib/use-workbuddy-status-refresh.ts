@@ -7,7 +7,7 @@ import { useAccountsStore } from "@/stores/accounts";
 
 export const WORKBUDDY_STATUS_REFRESH_INTERVAL_MS = 60 * 1000;
 
-/** Refresh WorkBuddy status only while the main window is visible and focused. */
+/** Refresh WorkBuddy status only while the main window is visible. */
 export function useWorkbuddyStatusRefresh() {
   const activeRef = useRef(false);
   const timerRef = useRef<number | undefined>(undefined);
@@ -21,7 +21,6 @@ export function useWorkbuddyStatusRefresh() {
     // installed this listener. Keep desktop inactive until isVisible() supplies
     // the authoritative initial value; later transitions arrive via the event.
     let mainWindowVisible = webui;
-    let windowFocused = document.hasFocus();
 
     function stopTimer() {
       if (timerRef.current !== undefined) {
@@ -41,7 +40,7 @@ export function useWorkbuddyStatusRefresh() {
     }
 
     function syncActiveState() {
-      const nextActive = documentVisible && mainWindowVisible && windowFocused;
+      const nextActive = documentVisible && mainWindowVisible;
       if (nextActive === activeRef.current) return;
 
       activeRef.current = nextActive;
@@ -60,18 +59,7 @@ export function useWorkbuddyStatusRefresh() {
       documentVisible = document.visibilityState !== "hidden";
       syncActiveState();
     };
-    const onFocus = () => {
-      windowFocused = true;
-      syncActiveState();
-    };
-    const onBlur = () => {
-      windowFocused = false;
-      syncActiveState();
-    };
-
     document.addEventListener("visibilitychange", onVisibilityChange);
-    window.addEventListener("focus", onFocus);
-    window.addEventListener("blur", onBlur);
     syncActiveState();
 
     let unlisten: (() => void) | undefined;
@@ -92,7 +80,7 @@ export function useWorkbuddyStatusRefresh() {
             mainWindowVisible = await getCurrentWindow().isVisible();
           } catch {
             // Preserve the previous DOM-based behavior if the native query is
-            // unavailable; focus is still required before polling can start.
+            // unavailable.
             mainWindowVisible = documentVisible;
           }
           if (disposed) return;
@@ -113,8 +101,6 @@ export function useWorkbuddyStatusRefresh() {
       abortControllerRef.current = undefined;
       stopTimer();
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("focus", onFocus);
-      window.removeEventListener("blur", onBlur);
       unlisten?.();
     };
   }, []);

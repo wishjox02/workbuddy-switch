@@ -1230,6 +1230,12 @@ pub fn save_github_config(config: Value) -> Result<Value, String> {
     Ok(update::load_github_config())
 }
 
+/// Configure the release/version service used by the desktop updater.
+#[tauri::command]
+pub fn configure_update_backend(url: String) -> Result<bool, String> {
+    crate::update_service::configure_backend(&url)
+}
+
 /// GET /api/update/check —— 检查 GitHub Releases 是否有新版本。
 /// force=true 时绕过缓存强制刷新（设置页手动检查）。
 ///
@@ -1242,6 +1248,23 @@ pub async fn check_update(
     force: Option<bool>,
 ) -> Value {
     crate::update_service::check(&app, proxy.as_deref(), force.unwrap_or(false)).await
+}
+
+/// 处理 WebView 通过系统网络取得的后台版本响应。
+#[tauri::command]
+pub fn apply_update_response(app: tauri::AppHandle, data: Value) -> Value {
+    crate::update_service::apply_external_check(&app, data)
+}
+
+/// 接收前端通过系统网络下载的安装包并启动本地安装。
+#[tauri::command]
+pub fn update_install_manual(
+    app: tauri::AppHandle,
+    version: String,
+    sha256: String,
+    bytes: Vec<u8>,
+) -> Result<(), String> {
+    crate::update_service::install_manual_package(&app, &version, &sha256, bytes)
 }
 
 /// GET /api/update/state —— 当前更新状态快照（前端首屏初始化 + 事件丢失兜底）。

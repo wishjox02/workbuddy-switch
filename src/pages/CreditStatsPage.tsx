@@ -555,26 +555,32 @@ function CreditBarShape({
 /** 从官方 daily（全量按模型聚合）构建层叠数据；模型按总消耗降序全部保留。 */
 function buildStackedChart(
   daily: CreditStatsDailyPoint[],
-): { models: string[]; points: ModelChartPoint[] } {
+): { models: string[]; labels: Record<string, string>; points: ModelChartPoint[] } {
   const modelTotals = new Map<string, number>();
   for (const point of daily) {
     for (const model of point.models ?? []) {
       modelTotals.set(model.model, (modelTotals.get(model.model) ?? 0) + model.credit);
     }
   }
-  const models = [...modelTotals.entries()]
+  const names = [...modelTotals.entries()]
     .sort((left, right) => right[1] - left[1])
     .map(([model]) => model);
+  // Model names come from the remote service. Keep user-controlled text out of
+  // CSS variable names and use stable local keys for chart data instead.
+  const models = names.map((_, index) => `model-${index}`);
+  const keyByName = new Map(names.map((name, index) => [name, models[index]]));
+  const labels = Object.fromEntries(names.map((name, index) => [models[index], name]));
 
   const points: ModelChartPoint[] = daily.map((point) => {
     const entry: ModelChartPoint = { date: point.date, total: point.usage };
     for (const model of point.models ?? []) {
-      const key = model.model;
+      const key = keyByName.get(model.model);
+      if (!key) continue;
       entry[key] = (typeof entry[key] === "number" ? entry[key] : 0) + model.credit;
     }
     return entry;
   });
-  return { models, points };
+  return { models, labels, points };
 }
 
 function TrendChart({
@@ -634,7 +640,7 @@ function TrendChart({
   const chartConfig: ChartConfig = {};
   for (const model of series) {
     chartConfig[model] = {
-      label: model === "total" ? "总消耗" : model,
+      label: model === "total" ? "总消耗" : stacked?.labels[model] ?? model,
       ...(stacked
         ? { color: MODEL_COLORS[series.indexOf(model) % MODEL_COLORS.length] }
         : { color: "var(--data-series-emerald)" }),
@@ -737,7 +743,7 @@ function TrendChart({
                 {stacked.models.map((model, index) => (
                   <span key={model} className="inline-flex items-center gap-1.5">
                     <span className="h-2 w-2 shrink-0 rounded-[2px]" style={{ backgroundColor: MODEL_COLORS[index % MODEL_COLORS.length] }} aria-hidden="true" />
-                    {model}
+                    {stacked.labels[model] ?? model}
                   </span>
                 ))}
               </div>
@@ -1800,7 +1806,7 @@ export default function CreditStatsPage() {
     viewVariant !== "all" && variantAccountIds !== null && variantAccountIds.size === 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1180px] min-w-0 px-4 py-6 sm:px-8 sm:py-9">
+    <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
       <header className="mb-10 flex min-w-0 flex-wrap items-start justify-between gap-4 sm:mb-12">
         <div className="min-w-0">
           <h1 className="text-[28px] font-semibold tracking-tight">积分统计</h1>

@@ -29,6 +29,13 @@ export default defineConfig(async () => ({
     port: 1420,
     strictPort: true,
     host: host || false,
+    proxy: {
+      // 浏览器开发页仍需访问本机 57890 账号服务；模型目录继续直连 57900 管理后台。
+      "/api": {
+        target: process.env.VITE_WB_SWITCH_API || "http://127.0.0.1:57890",
+        changeOrigin: false,
+      },
+    },
     hmr: host
       ? {
           protocol: "ws",
@@ -38,7 +45,7 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/target/**"],
     },
   },
 }));

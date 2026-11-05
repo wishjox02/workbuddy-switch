@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import * as api from "@/lib/api";
 import type { UpdateSnapshot } from "@/lib/types";
+import { adminBackendUrl } from "@/lib/admin-backend";
 
 /**
  * 统一更新服务状态（Rust 单一真相源）。
@@ -26,6 +27,7 @@ const IDLE_SNAPSHOT: UpdateSnapshot = {
 let snapshot: UpdateSnapshot = IDLE_SNAPSHOT;
 const listeners = new Set<() => void>();
 let unlisten: (() => void) | undefined;
+let periodicCheck: ReturnType<typeof setInterval> | undefined;
 /** 订阅代际：`start` / `stop` 都自增；迟到的 Promise 回调据此判断自己是否已作废。 */
 let generation = 0;
 
@@ -36,13 +38,22 @@ function publish(next: UpdateSnapshot) {
 
 function start() {
   const current = ++generation;
-  void api
-    .updateState()
+  void (async () => {
+    if (api.isDesktop()) {
+      try {
+        await api.configureUpdateBackend(adminBackendUrl());
+      } catch {
+        // The check below will publish the useful request error.
+      }
+      await api.checkUpdate(undefined, true).catch(() => {});
+    }
+    return api.updateState();
+  })()
     .then((state) => {
       if (current === generation && state) publish(state);
     })
-    .catch(() => {
-      // 拉取失败保持上一次快照：事件推送仍会覆盖它。
+    .catch((error) => {
+      if (current === generation) publish({ ...IDLE_SNAPSHOT, phase: "error", message: api.asError(error) });
     });
   if (api.isWebui()) return;
   void listen<UpdateSnapshot>("update-state", (event) => {
@@ -56,12 +67,19 @@ function start() {
     }
     unlisten = fn;
   });
+  if (api.isDesktop()) {
+    periodicCheck = setInterval(() => {
+      void api.checkUpdate(undefined, true).catch(() => {});
+    }, 30 * 60 * 1000);
+  }
 }
 
 function stop() {
   generation += 1;
   unlisten?.();
   unlisten = undefined;
+  if (periodicCheck) clearInterval(periodicCheck);
+  periodicCheck = undefined;
 }
 
 function subscribe(onStoreChange: () => void): () => void {

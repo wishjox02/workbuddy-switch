@@ -1,0 +1,24 @@
+[package]
+name = "wb-switch-admin"
+version = "0.1.79"
+edition = "2021"
+description = "WorkBuddy 安装统计与版本管理后台"
+
+[[bin]]
+name = "wb-admin"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+tower-http = { version = "0.6", features = ["cors"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
+url = "2"
+sha2 = "0.10"
+uuid = { version = "1", features = ["v4"] }

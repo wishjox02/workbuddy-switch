@@ -3,6 +3,7 @@ mod commands;
 mod companion;
 #[cfg(target_os = "macos")]
 mod instance_lock;
+mod local_models;
 #[cfg(desktop)]
 mod tray;
 mod update_service;
@@ -127,11 +128,6 @@ fn spawn_background_loops(app: tauri::AppHandle) {
         }
     });
 
-    // 统一更新服务：首次 15 秒后检查一次，之后每 30 分钟（未带 force，走 core 的
-    // 6 小时缓存）。检查由 Rust 常驻，替代前端 30 分钟轮询：轻量模式 / 主窗口关闭时
-    // 同样在跑，托盘菜单随时反映最新阶段。
-    update_service::spawn_periodic_check(app.clone());
-
     // 限额 hook 信号：轮询 `~/.wb-switch/hook-events.jsonl`（CLI / WorkBuddy 的 429 当轮
     // 由客户端 hook 追加），入账后通知前端立即拉取。轻量模式下窗口销毁但进程仍在，
     // 状态由后端持有（见 `rate_limit_events.rs`）。
@@ -151,6 +147,10 @@ fn spawn_background_loops(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    if run_update_wait_helper() {
+        return;
+    }
     let mut builder = tauri::Builder::default();
 
     // 单实例互斥必须最先注册：`Builder::build()` 按注册顺序 initialize_plugins，
@@ -288,7 +288,10 @@ pub fn run() {
             commands::get_rotate_logs,
             commands::get_github_config,
             commands::save_github_config,
+            commands::configure_update_backend,
             commands::check_update,
+            commands::apply_update_response,
+            commands::update_install_manual,
             commands::update_state,
             commands::update_download,
             commands::update_restart,
@@ -304,6 +307,23 @@ pub fn run() {
             companion::get_companion_enabled,
             companion::set_companion_enabled,
             companion::open_companion_settings,
+            local_models::local_workbuddy_models,
+            local_models::local_workbuddy_import,
+            local_models::local_workbuddy_update_connection,
+            local_models::local_workbuddy_clear_connection,
+            local_models::local_workbuddy_remove,
+            local_models::local_workbuddy_remove_external,
+            local_models::local_workbuddy_disable,
+            local_models::local_workbuddy_enable,
+            local_models::local_workbuddy_remove_all,
+            local_models::local_dsh_models,
+            local_models::local_dsh_import,
+            local_models::local_dsh_remove,
+            local_models::local_dsh_remove_external,
+            local_models::local_dsh_remove_all,
+            local_models::local_dsh_disable,
+            local_models::local_dsh_enable,
+            local_models::restart_deepseek_harness,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -311,6 +331,13 @@ pub fn run() {
     app.run(|_app_handle, event| {
         #[cfg(desktop)]
         {
+            #[cfg(target_os = "macos")]
+            if matches!(&event, tauri::RunEvent::Ready)
+                && !tray::is_silent_startup(std::env::args())
+            {
+                // The configured window starts hidden; show it once the macOS event loop is ready.
+                tray::show_main_window_on_reopen(_app_handle);
+            }
             // 点击 Dock / Finder 再次激活已运行实例：窗口已隐藏到托盘时显示主窗口。
             // `Reopen` 在主线程派发，可直接调用窗口路径。
             #[cfg(target_os = "macos")]
@@ -324,4 +351,35 @@ pub fn run() {
             tray::on_run_event(event);
         }
     });
+}
+
+#[cfg(target_os = "windows")]
+fn run_update_wait_helper() -> bool {
+    let mut args = std::env::args_os();
+    let _ = args.next();
+    if args.next().as_deref() != Some(std::ffi::OsStr::new("--wb-update-wait")) {
+        return false;
+    }
+    let Some(installer) = args.next() else { return true; };
+    let Some(installed_exe) = args.next() else { return true; };
+    let installer = std::path::PathBuf::from(installer);
+    let installed_exe = std::path::PathBuf::from(installed_exe);
+    std::thread::spawn(move || {
+        let status = std::process::Command::new(&installer)
+            .arg("/S")
+            .status();
+        if !status.is_ok_and(|status| status.success()) {
+            return;
+        }
+        for _ in 0..60 {
+            if installed_exe.is_file() {
+                let _ = std::process::Command::new(&installed_exe).spawn();
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+    })
+    .join()
+    .ok();
+    true
 }

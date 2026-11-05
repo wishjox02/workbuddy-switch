@@ -18,6 +18,9 @@ src-tauri/binaries/agent-studio-runtime-*
 # Rust / Tauri 构建产物（workspace target）
 target/
 src-tauri/target/
+wb-admin-preview.sqlite3
+wb-admin-preview.sqlite3-shm
+wb-admin-preview.sqlite3-wal
 
 # npm 包 postinstall 下载的平台二进制
 npm/bin/wb-switch-*
@@ -55,3 +58,6 @@ npm/platform/*/bin/
 .grok/
 /.workbuddy/
 /AGENTS.md
+.tmp-admin-key.txt
+.tmp-*-key*
+.tmp-smsprev/

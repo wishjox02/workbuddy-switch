@@ -4,13 +4,14 @@
 //! token 不出本机。
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 #[cfg(target_os = "windows")]
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
 use axum::extract::{Query, RawQuery};
-use axum::http::{header, StatusCode, Uri};
+use axum::http::{header, Request, StatusCode, Uri};
+use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -56,6 +57,14 @@ struct Assets;
 /// 切换进度缓存：webui 通过 GET /api/switch/progress 轮询。
 static SWITCH_PROGRESS: Mutex<Option<String>> = Mutex::new(None);
 static SWITCH_RUNNING: Mutex<bool> = Mutex::new(false);
+static LOCAL_API_TOKEN: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+pub fn set_local_api_token(token: String) {
+    *LOCAL_API_TOKEN
+        .get_or_init(|| Mutex::new(None))
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(token);
+}
 
 pub fn router() -> Router {
     Router::new()
@@ -224,6 +233,60 @@ pub fn router() -> Router {
             get(api_update_config).post(api_save_update_config),
         )
         .fallback(static_handler)
+        .layer(axum::middleware::from_fn(local_request_guard))
+}
+
+/// The CLI server is loopback-only, but browsers can still send cross-origin
+/// requests to loopback. Reject non-loopback Host/Origin values and prevent API
+/// responses from being cached by a shared browser cache.
+async fn local_request_guard(request: Request<Body>, next: Next) -> Response {
+    let is_api = request.uri().path().starts_with("/api/");
+    let host_ok = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .map(|host| {
+            let host = if host.starts_with('[') {
+                host.trim_start_matches('[').split(']').next().unwrap_or(host)
+            } else {
+                host.split(':').next().unwrap_or(host)
+            };
+            matches!(host, "127.0.0.1" | "localhost" | "[::1]" | "::1")
+        })
+        .unwrap_or(true);
+    let origin_ok = request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        .map(|origin| {
+            origin.starts_with("http://127.0.0.1:")
+                || origin.starts_with("http://localhost:")
+                || origin == "http://[::1]"
+                || origin.starts_with("http://[::1]:")
+        })
+        .unwrap_or(true);
+    let token = LOCAL_API_TOKEN
+        .get()
+        .and_then(|value| value.lock().ok().and_then(|guard| guard.clone()));
+    let token_ok = token.as_deref().map_or(true, |expected| {
+        request
+            .headers()
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .is_some_and(|provided| provided == expected)
+    });
+    if is_api && (!host_ok || !origin_ok || !token_ok) {
+        return json_err("仅允许本机 WebUI 请求".to_string(), StatusCode::FORBIDDEN);
+    }
+    let mut response = next.run(request).await;
+    if is_api {
+        response.headers_mut().insert(
+            header::CACHE_CONTROL,
+            "no-store".parse().expect("valid cache header"),
+        );
+    }
+    response
 }
 
 fn json_ok(v: Value) -> Response {

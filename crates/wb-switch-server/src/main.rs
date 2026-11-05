@@ -147,6 +147,8 @@ async fn serve(args: &[String]) {
         }
     }
 
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    api::set_local_api_token(token.clone());
     let app = api::router();
     let addr = format!("127.0.0.1:{port}");
     let listener = match tokio::net::TcpListener::bind(&addr).await {
@@ -157,13 +159,17 @@ async fn serve(args: &[String]) {
         }
     };
 
+    let no_open = args.iter().any(|a| a == "--no-open");
     println!("workbuddy-switch v{}", update::APP_VERSION);
-    println!("webui: http://{addr}");
+    if no_open {
+        println!("webui: http://{addr}/?wb_token={token}");
+    } else {
+        println!("webui: http://{addr}");
+    }
     println!("按 Ctrl+C 停止服务。");
 
-    let no_open = args.iter().any(|a| a == "--no-open");
     if !no_open {
-        open_browser(&addr);
+        open_browser(&addr, &token);
     }
 
     spawn_background_loops();
@@ -171,8 +177,8 @@ async fn serve(args: &[String]) {
     axum::serve(listener, app).await.unwrap();
 }
 
-fn open_browser(addr: &str) {
-    let url = format!("http://{addr}");
+fn open_browser(addr: &str, token: &str) {
+    let url = format!("http://{addr}/?wb_token={token}");
     #[cfg(target_os = "macos")]
     {
         let _ = std::process::Command::new("open").arg(&url).spawn();

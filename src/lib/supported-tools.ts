@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
  * 语义（与设置页文案一致）：
  * - 关闭某工具 = 该工具的入口（账号卡片按钮、页顶状态徽标）不渲染，相关状态
  *   轮询也跳过；**不影响账号库与其它工具**，重新打开即恢复。
- * - 默认值：现有的四个端默认开启；JetBrains 端默认关闭（作者要求的灰度策略）。
+ * - 当前产品只开放 WorkBuddy；其余类型保留用于兼容旧版本账号库和 API。
  *
  * 持久化在 localStorage（与 `wb-switch.compact` / `wb-switch.theme` 同风格），
  * 键名 `wb-switch.tools.<id>`，值 `"1"` / `"0"`；缺省时取 `defaultEnabled`。
@@ -27,32 +27,8 @@ export const SUPPORTED_TOOLS: ToolDef[] = [
   {
     id: "workbuddy",
     label: "WorkBuddy",
-    description: "WorkBuddy 桌面客户端账号切换与会话复制",
+    description: "WorkBuddy 桌面客户端账号切换与积分管理",
     defaultEnabled: true,
-  },
-  {
-    id: "codebuddyIde",
-    label: "CodeBuddy IDE",
-    description: "CodeBuddy IDE 桌面客户端（国内版 / 国际版）账号切换",
-    defaultEnabled: true,
-  },
-  {
-    id: "codebuddyCli",
-    label: "CodeBuddy CLI",
-    description: "CodeBuddy CLI 默认账号与自动轮换",
-    defaultEnabled: true,
-  },
-  {
-    id: "vscodeExt",
-    label: "VS Code CodeBuddy 插件",
-    description: "VS Code 内 CodeBuddy 插件账号切换与会话复制",
-    defaultEnabled: true,
-  },
-  {
-    id: "jetbrains",
-    label: "JetBrains IDE 插件（IDEA / PyCharm）",
-    description: "IntelliJ IDEA / PyCharm 内 CodeBuddy 插件账号切换",
-    defaultEnabled: false,
   },
 ];
 
@@ -65,7 +41,8 @@ const TOOLS_CHANGED_EVENT = "wb-switch:tools-changed";
 
 export function isToolEnabled(id: ToolId): boolean {
   const def = SUPPORTED_TOOLS.find((t) => t.id === id);
-  const fallback = def?.defaultEnabled ?? true;
+  // 非 WorkBuddy 工具的类型定义仍保留给旧数据和兼容 API，但不再进入产品界面。
+  const fallback = def?.defaultEnabled ?? false;
   try {
     const stored = localStorage.getItem(storageKey(id));
     if (stored === null) return fallback;

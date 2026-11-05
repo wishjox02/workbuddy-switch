@@ -158,9 +158,11 @@ jobs:
 
       # 前端构建产物（CLI 二进制 rust-embed 嵌入 + Tauri App 使用）
       - name: Build frontend
+        env:
+          AGENT_COMPANION_TARGET: ${{ matrix.target }}
         run: |
           npm install
-          npm run build
+          npm run build:desktop
 
       # CLI 二进制
       - name: Build server binary
@@ -195,7 +197,7 @@ jobs:
       # 仓库变量 PUBLISH_APP=false 时整段跳过：纯 npm/CLI 改动可只发 npm 不发桌面 App；
       # 恢复为 true 后重跑本工作流即可幂等补发（与 PUBLISH_NPM 对称）。
       - name: Build desktop app
-        if: vars.PUBLISH_APP != 'false'
+        if: vars.PUBLISH_APP != 'false' || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -209,17 +211,27 @@ jobs:
           BUNDLE_ROOT="target/${{ matrix.target }}/release/bundle"
           # cargo cache 会保留旧 NSIS/DMG/AppImage；不清理就会把 0.1.17 一类产物带进 Release。
           rm -rf "$BUNDLE_ROOT"
-          npm run tauri -- build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            if [ "${{ matrix.bundles }}" = "app" ]; then
+              npx tauri build --target ${{ matrix.target }} --bundles app \
+                --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"signingIdentity":"-"}}}'
+            else
+              npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} \
+                --no-sign --config '{"bundle":{"createUpdaterArtifacts":false}}'
+            fi
+          else
+            npx tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+          fi
           echo "bundle after build:"
           find "$BUNDLE_ROOT" -type f | sort || true
           if [ "${{ matrix.bundles }}" = "nsis" ]; then
-            STALE=$(find "$BUNDLE_ROOT" -type f -name '*-setup.exe' ! -name "workbuddy-switch_${VER}_x64-setup.exe" || true)
+            STALE=$(find "$BUNDLE_ROOT" -type f -name '*-setup.exe' ! -name "小玉米_${VER}_x64-setup.exe" || true)
             if [ -n "$STALE" ]; then
               echo "error: stale Windows installer still present:" >&2
               printf '%s\n' "$STALE" >&2
               exit 1
             fi
-            test -f "$BUNDLE_ROOT/nsis/workbuddy-switch_${VER}_x64-setup.exe"
+            test -f "$BUNDLE_ROOT/nsis/小玉米_${VER}_x64-setup.exe"
           fi
           find "$BUNDLE_ROOT" -type f \
             \( -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.deb' \
@@ -227,12 +239,26 @@ jobs:
             -exec cp {} dist-bin/ \;
           # mac：纯命令行打 dmg（CI 无 Finder，Tauri 自带的 bundle_dmg.sh 会失败）
           if [ "${{ matrix.bundles }}" = "app" ]; then
-            sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "target/${{ matrix.target }}/release/bundle/macos/workbuddy-switch.app"
-            cp "workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg" dist-bin/
+            APP="target/${{ matrix.target }}/release/bundle/macos/小玉米.app"
+            MAIN="$APP/Contents/MacOS/workbuddy-switch"
+            RUNTIME="$APP/Contents/MacOS/agent-studio-runtime"
+            test -f "$MAIN" && test -f "$RUNTIME"
+            file "$MAIN" "$RUNTIME"
+            codesign --verify --deep --strict --verbose=2 "$APP"
+            spctl --assess --type execute --verbose=2 "$APP" || true
+            sh scripts/make-dmg.sh "$VER" "${{ matrix.update_arch }}" "$APP"
+            DMG="workbuddy-switch_${VER}_${{ matrix.update_arch }}.dmg"
+            hdiutil verify "$DMG"
+            MOUNT="$RUNNER_TEMP/wb-switch-dmg-verify"
+            mkdir -p "$MOUNT"
+            hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG"
+            codesign --verify --deep --strict --verbose=2 "$MOUNT/小玉米.app"
+            hdiutil detach "$MOUNT"
+            cp "$DMG" dist-bin/
           fi
 
       - name: Generate updater manifest
-        if: matrix.update_arch != '' && vars.PUBLISH_APP != 'false'
+        if: matrix.update_arch != '' && vars.PUBLISH_APP != 'false' && startsWith(github.ref, 'refs/tags/v')
         shell: bash
         env:
           UPDATE_OS: ${{ matrix.update_os }}
@@ -282,7 +308,7 @@ jobs:
             exit 0
           fi
           if [ "$UPDATE_OS" = "windows" ]; then
-            ARCHIVE="$BUNDLE_DIR/workbuddy-switch_${VER}_x64-setup.exe"
+            ARCHIVE="$BUNDLE_DIR/小玉米_${VER}_x64-setup.exe"
           else
             ARCHIVE="$(find "$BUNDLE_DIR" -maxdepth 1 -type f -name '*.app.tar.gz' | sort)"
             COUNT=$(printf '%s\n' "$ARCHIVE" | sed '/^$/d' | wc -l | tr -d ' ')
@@ -299,7 +325,7 @@ jobs:
           cp "$ARCHIVE" "dist-bin/$UPDATE_ARCHIVE_NAME"
           cp "$ARCHIVE.sig" "dist-bin/$UPDATE_ARCHIVE_NAME.sig"
           if [ "$UPDATE_OS" = "windows" ]; then
-            cmp -s "dist-bin/$UPDATE_ARCHIVE_NAME" "dist-bin/workbuddy-switch_${VER}_x64-setup.exe"
+            cmp -s "dist-bin/$UPDATE_ARCHIVE_NAME" "dist-bin/小玉米_${VER}_x64-setup.exe"
           fi
           UPDATE_VERSION="$VER" sh scripts/gen-update-json.sh
           MANIFEST="$BUNDLE_DIR/latest-${UPDATE_OS}-${UPDATE_ARCH}.json"
@@ -307,7 +333,7 @@ jobs:
           cp "$MANIFEST" dist-bin/
 
       - uses: actions/upload-artifact@v4
-        if: vars.PUBLISH_APP != 'false'
+        if: vars.PUBLISH_APP != 'false' || github.event_name == 'workflow_dispatch'
         with:
           name: ${{ matrix.name }}
           path: dist-bin/
