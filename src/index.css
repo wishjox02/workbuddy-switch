@@ -177,6 +177,23 @@
 }
 
 @layer components {
+  @keyframes wb-announcement-marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(-50% - 2rem));
+    }
+  }
+
+  .wb-announcement-track {
+    animation: wb-announcement-marquee 60s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wb-announcement-track { animation: none; }
+  }
+
   .wb-page {
     min-height: calc(100% - 64px);
   }

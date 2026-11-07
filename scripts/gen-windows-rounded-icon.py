@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake macOS-like rounded corners into Windows icon assets.
+"""Generate Windows icon assets with a white rounded background.
 
 macOS applies a squircle mask to square app icons. Windows shows the bitmap as-is,
 so icon.ico and the Store/Start-menu Square*.png files need transparent corners.
@@ -44,7 +44,12 @@ def rounded(im: Image.Image, radius_ratio: float = RADIUS_RATIO) -> Image.Image:
 
 def main() -> None:
     src = Image.open(ROOT / "icon.png").convert("RGBA")
-    rounded_src = rounded(src)
+    size = src.width
+    canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
+    logo_size = round(size * 0.86)
+    logo = src.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(logo, ((size - logo_size) // 2, (size - logo_size) // 2))
+    rounded_src = rounded(canvas)
     rounded_src.save(ROOT / "icon-windows.png", "PNG")
     rounded_src.save(
         ROOT / "icon.ico",

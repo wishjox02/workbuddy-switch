@@ -77,6 +77,7 @@ pub fn router(state: AdminState) -> Router {
         .route("/api/admin/sms/settings", get(admin_sms_settings_get).put(admin_sms_settings_put))
         .route("/api/admin/announcement", get(admin_announcement_get).post(admin_announcement_post))
         .route("/api/client/credits", get(client_credits))
+        .route("/api/client/redeem", post(client_redeem))
         .route("/api/client/auth/sms/send", post(client_sms_send))
         .route("/api/client/auth/sms/login", post(client_sms_login))
         .route("/api/client/auth/me", get(client_auth_me))
@@ -560,6 +561,24 @@ async fn client_credits(State(state): State<AdminState>, headers: HeaderMap) -> 
         },
         Ok(None) => json_error(StatusCode::UNAUTHORIZED, "登录已过期".to_string()),
         Err(error) => json_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RedeemInput { code: String }
+
+async fn client_redeem(State(state): State<AdminState>, headers: HeaderMap, Json(payload): Json<RedeemInput>) -> Response {
+    let Some(token) = session_token(&headers) else { return json_error(StatusCode::UNAUTHORIZED, "未登录".to_string()); };
+    let user = match state.store.user_by_token(&token) {
+        Ok(Some(user)) => user,
+        Ok(None) => return json_error(StatusCode::UNAUTHORIZED, "登录已过期".to_string()),
+        Err(error) => return json_error(StatusCode::INTERNAL_SERVER_ERROR, error.to_string()),
+    };
+    match state.store.redeem_code(user.id, &payload.code) {
+        Ok(Some((credits, balance))) => Json(crate::store::ok_json(json!({ "credits": credits, "balance": balance }))).into_response(),
+        Ok(None) => json_error(StatusCode::UNAUTHORIZED, "用户不存在".to_string()),
+        Err(error) => json_error(StatusCode::BAD_REQUEST, error),
     }
 }
 

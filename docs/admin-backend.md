@@ -38,6 +38,7 @@ cargo run -p wb-switch-admin
 - `POST /api/admin/users/:id/consumption/sync`：读取 Sub2API 用户累计消费，计算新增消费并扣除本地积分
 - `POST /api/admin/sub2api/users/consumption-sync`：批量同步所有已绑定用户的 Sub2API 消费
 - `GET /api/client/credits`：客户端读取当前用户积分和流水
+- `POST /api/client/redeem`：客户端核销一次性兑换码并增加积分
 - `GET /api/admin/releases`：版本发布记录
 - `POST /api/admin/releases`：创建或更新版本发布记录
 - `GET /api/admin/sub2api/config`：读取脱敏后的 Sub2API 配置
@@ -68,7 +69,7 @@ cargo run -p wb-switch-admin
 
 ## 接入客户端
 
-客户端优先通过 `VITE_WB_ADMIN_URL` 配置后台地址；未设置时读取本地保存的地址，开发模式和桌面版默认使用线上 API `https://woai.info/admin/api`，Web 部署回退到当前来源。若需要本地预览后台，请显式设置 `VITE_WB_ADMIN_URL=http://127.0.0.1:57900`。地址可以填写域名根路径、反向代理前缀（例如 `/admin`）或完整 API 根路径（例如 `/admin/api`），客户端会自动补齐且不会重复 `/api`。远程部署仍应显式设置 `VITE_WB_ADMIN_URL`。演示模式不会发送后台请求。客户端只读取模型目录和代理响应，不接收 API Key。
+客户端优先通过 `VITE_WB_ADMIN_URL` 配置后台地址；未设置时读取本地保存的地址，开发模式和桌面版默认使用线上 API `https://admin.woai.info/api`，Web 部署回退到当前来源。若需要本地预览后台，请显式设置 `VITE_WB_ADMIN_URL=http://127.0.0.1:57900`。地址可以填写域名根路径、反向代理前缀（例如 `/admin`）或完整 API 根路径（例如 `/admin/api`），客户端会自动补齐且不会重复 `/api`。远程部署仍应显式设置 `VITE_WB_ADMIN_URL`。演示模式不会发送后台请求。客户端只读取模型目录和代理响应，不接收 API Key。
 
 Sub2API 的 Base URL、管理员 API Key 密文、用户专属 API Key 密文、模型缓存和同步状态都保存在 `WB_ADMIN_DB` 指定的 SQLite 数据库中。消费同步读取 Sub2API `/api/v1/admin/users/:id/usage` 的累计 `total_cost`，用本地快照计算新增消费，避免重复扣除。每次扣除写入 `sub2api_usage` 流水；本地积分为 0 时把 Sub2API 用户余额设为 0，大于 0 时设为 99999999。手机号 `13800138000` 会映射为 `13800138000@users.workbuddy.local`，登录或手动同步时创建/匹配对应 Sub2API 用户，并尝试在 `China-models` 分组创建用户 API Key。新版本优先使用管理员创建 Key 接口；旧版本会使用管理员重置密码后登录用户 `/api/v1/keys` 的兼容流程。客户端登录后只读取该用户 Key 可用的模型；导入 WorkBuddy 时由后台把 Key 写入本机 `models.json`，完整 Key 不返回浏览器。所有 Key 都使用 AES-256-GCM 加密，主密钥由 `WB_ADMIN_MASTER_KEY` 提供；主密钥丢失后无法解密旧配置，需要重新录入 Key。
 ## 短信验证码登录

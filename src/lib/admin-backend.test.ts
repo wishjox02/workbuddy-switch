@@ -18,7 +18,7 @@ describe("adminApiUrl", () => {
   it("uses the online API by default in development", () => {
     vi.stubEnv("VITE_WB_ADMIN_URL", "");
 
-    expect(adminBackendUrl()).toBe("https://woai.info/admin/api");
+    expect(adminBackendUrl()).toBe("https://admin.woai.info/api");
   });
 
   it("migrates the old saved woai.info root address", () => {
@@ -29,7 +29,7 @@ describe("adminApiUrl", () => {
       },
     });
 
-    expect(adminBackendUrl()).toBe("https://woai.info/admin/api");
+    expect(adminBackendUrl()).toBe("https://admin.woai.info/api");
   });
 
   it("adds the API route prefix to a domain root", () => {

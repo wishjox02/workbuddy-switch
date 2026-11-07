@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createRechargeOrder, fetchRechargeConfig, rechargePaymentTargets, rechargeStatusState } from "./sub2api";
+import { confirmRechargeReturn, createRechargeOrder, fetchRechargeConfig, rechargePaymentTargets, rechargeStatusState } from "./sub2api";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -90,5 +90,25 @@ describe("recharge order status", () => {
     expect(rechargeStatusState("Failed")).toBe("other");
     expect(rechargeStatusState("Paid")).toBe("paid");
     expect(rechargeStatusState("Credited")).toBe("credited");
+  });
+});
+
+describe("payment return confirmation", () => {
+  it("posts the signed payment parameters to the new backend", async () => {
+    vi.stubEnv("VITE_WB_ADMIN_URL", "https://woai.info/admin/api");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const params = new URLSearchParams({ out_trade_no: "WB123", trade_status: "TRADE_SUCCESS", sign: "signed" });
+    await expect(confirmRechargeReturn(params)).resolves.toEqual({ order: null });
+    expect(fetchMock).toHaveBeenCalledWith("https://woai.info/admin/api/client/recharge/confirm", expect.objectContaining({ method: "POST" }));
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ out_trade_no: "WB123", trade_status: "TRADE_SUCCESS", sign: "signed" });
+  });
+
+  it("allows fallback only when the new endpoint does not exist", async () => {
+    vi.stubEnv("VITE_WB_ADMIN_URL", "https://woai.info/admin/api");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 404 })));
+    await expect(confirmRechargeReturn(new URLSearchParams())).resolves.toBeNull();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "验签失败" }), { status: 400 })));
+    await expect(confirmRechargeReturn(new URLSearchParams())).rejects.toThrow("验签失败");
   });
 });

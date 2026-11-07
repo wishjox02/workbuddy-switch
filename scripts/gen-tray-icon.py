@@ -28,7 +28,7 @@ REPO = Path(__file__).resolve().parent.parent
 # 单色素材的墨色：黑猫用在浅色任务栏，白猫用在深色任务栏。
 MONO_RGB = {"black": (17, 17, 19), "white": (255, 255, 255)}
 MONO_TEMPLATE = "src-tauri/icons/tray-icon-template.png"
-COLOR_SRC = "public/icon-transparent.png"
+COLOR_SRC = "src-tauri/icons/icon-windows.png"
 COLOR_OUT = "src-tauri/icons/tray-icon-color.rgba"
 
 

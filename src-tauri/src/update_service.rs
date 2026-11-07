@@ -102,7 +102,7 @@ static MENU_PROGRESS_BUCKET: AtomicU8 = AtomicU8::new(u8::MAX);
 /// 本轮下载是否已打过「进度开始上报」日志（排障用，一次下载只打一行）。
 static PROGRESS_REPORTED: AtomicBool = AtomicBool::new(false);
 
-const DEFAULT_BACKEND: &str = "https://woai.info/admin/api";
+const DEFAULT_BACKEND: &str = "https://admin.woai.info/api";
 
 fn normalize_backend(value: &str) -> Result<tauri::Url, String> {
     let mut url = tauri::Url::parse(value.trim()).map_err(|_| "后台地址无效")?;

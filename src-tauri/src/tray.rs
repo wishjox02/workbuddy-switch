@@ -17,7 +17,7 @@ use crate::update_service::{UpdatePhase, UpdateSnapshot};
 
 const TRAY_ID: &str = "main-menu-bar";
 const MAIN_WINDOW_LABEL: &str = "main";
-const DEFAULT_TOOLTIP: &str = "小玉米";
+const DEFAULT_TOOLTIP: &str = "小玉米API";
 const CHECKIN_TOOLTIP_RESTORE_SECS: u64 = 8;
 
 /// 系统自启注册的启动参数：仅携带该精确参数的启动进入静默托盘模式。
@@ -91,7 +91,7 @@ pub fn on_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
         window
             .dialog()
             .message("请选择关闭方式")
-            .title("小玉米")
+            .title("小玉米API")
             .buttons(MessageDialogButtons::YesNoCancelCustom(
                 "退出应用".into(),
                 "最小化到托盘".into(),

@@ -8,6 +8,15 @@ afterEach(() => {
 });
 
 describe("fetchCustomModelUsage", () => {
+  it("preserves missing totals and uses the full record count", async () => {
+    vi.stubGlobal("window", { localStorage: { getItem: () => null } });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, data: {
+      records: [], total: 85, page: 1, pageSize: 50, summary: { costCny: null },
+    } }), { status: 200 })));
+    const result = await fetchCustomModelUsage({ page: 1, pageSize: 50, startDate: "2026-10-01", endDate: "2026-10-31" });
+    expect(result.summary).toMatchObject({ requests: 85, inputTokens: null, outputTokens: null, costCny: null });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toContain("startDate=2026-10-01&endDate=2026-10-31");
+  });
   it("normalizes snake_case usage records and stats from older backends", async () => {
     vi.stubEnv("VITE_WB_ADMIN_URL", "https://woai.info/admin/api");
     vi.stubGlobal("window", { localStorage: { getItem: () => "user-session" } });

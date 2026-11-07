@@ -979,6 +979,9 @@ fn admin_api_error(status: reqwest::StatusCode, value: &Value) -> String {
     if code == "INVALID_ADMIN_KEY" || status == reqwest::StatusCode::UNAUTHORIZED {
         return "Sub2API 管理 API Key 无效或已失效，请重新生成 Admin API Key".to_string();
     }
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return "Sub2API 管理接口返回 404，请确认后台配置的 Base URL 是服务根地址（不要填写 /v1），并确认该 Sub2API 版本已启用 /api/v1/admin 接口".to_string();
+    }
     format!("Sub2API 管理接口返回 {status}：{message}")
 }
 

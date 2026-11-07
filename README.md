@@ -104,7 +104,7 @@ workbuddy-switch status       # 终端查看当前账号
 
 ## 管理后台
 
-仓库包含独立的 `wb-switch-admin` 服务，用于管理匿名安装统计和版本发布记录。启动方式与环境变量见 [管理后台文档](docs/admin-backend.md)。客户端默认接入线上后台 API `https://woai.info/admin/api`，也可在设置页「后台服务」保存自建地址，或在构建时用 `VITE_WB_ADMIN_URL` 注入；匿名心跳跟随同一后台地址发送。
+仓库包含独立的 `wb-switch-admin` 服务，用于管理匿名安装统计和版本发布记录。启动方式与环境变量见 [管理后台文档](docs/admin-backend.md)。客户端默认接入线上后台 API `https://admin.woai.info/api`，也可在设置页「后台服务」保存自建地址，或在构建时用 `VITE_WB_ADMIN_URL` 注入；匿名心跳跟随同一后台地址发送。
 
 管理后台还支持配置 Sub2API Base URL 和管理员 API Key。管理员 Key 只在后台加密保存；手机号用户登录后，后台自动创建并加密保存该用户专属 API Key，客户端只读取当前用户可用模型，不会收到管理员 Key。
 

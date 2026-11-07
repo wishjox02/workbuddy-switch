@@ -10,13 +10,13 @@ import { cn } from "@/lib/utils";
 import { DEMO_UNAVAILABLE_MESSAGE, demoModeEnabled } from "@/lib/demo-mode";
 import { isDesktop } from "@/lib/api";
 import { authChangedEvent, readClientToken } from "@/lib/auth";
+import { adminApiUrl } from "@/lib/admin-backend";
 import { MODEL_BALANCE_CHANGED } from "@/lib/use-model-balance";
+import { pageCacheIdentity, readPageCache, writePageCache } from "@/lib/page-cache";
 import {
-  createRechargeOrder, fetchRechargeConfig, fetchRechargeOrderStatus, fetchRechargeOrders, rechargePaymentTargets, rechargeStatusState,
+  confirmRechargeReturn, createRechargeOrder, fetchClientBalance, fetchRechargeConfig, fetchRechargeOrderStatus, fetchRechargeOrders, rechargePaymentTargets, rechargeStatusState,
   type RechargeConfig, type RechargeOrder,
 } from "@/lib/sub2api";
-
-const PRESET_AMOUNTS = [10, 30, 50, 100, 200, 500];
 
 const PAY_TYPES: Array<{ id: string; label: string; hint: string }> = [
   { id: "alipay", label: "支付宝", hint: "推荐，支持扫码/跳转" },
@@ -54,13 +54,15 @@ async function openPaymentUrl(url: string): Promise<void> {
 }
 
 export default function RechargePage() {
-  const [config, setConfig] = useState<RechargeConfig | null>(null);
+  const [config, setConfig] = useState<RechargeConfig | null>(() => readPageCache<RechargeConfig>("recharge-config") ?? null);
+  const [configVerified, setConfigVerified] = useState(false);
+  const [configRevision, setConfigRevision] = useState(0);
   const [configError, setConfigError] = useState<string | null>(null);
   const [amount, setAmount] = useState<string>("30");
   const [selectedActivityId, setSelectedActivityId] = useState<number | null>(null);
   const [payType, setPayType] = useState<string>("alipay");
   const [creating, setCreating] = useState(false);
-  const [orders, setOrders] = useState<RechargeOrder[]>([]);
+  const [orders, setOrders] = useState<RechargeOrder[]>(() => readPageCache<RechargeOrder[]>("recharge-orders") ?? []);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [payUrl, setPayUrl] = useState<string | null>(null);
   const [payQrValue, setPayQrValue] = useState<string | null>(null);
@@ -70,15 +72,27 @@ export default function RechargePage() {
   const [checking, setChecking] = useState(false);
   const pollRef = useRef<string | null>(null);
   const authEpoch = useRef(0);
+  const returnHandled = useRef(false);
+
+  async function refreshBalanceAfterPayment() {
+    try {
+      const result = await fetchClientBalance();
+      writePageCache("model-balance", result.balance, pageCacheIdentity());
+    } catch {
+      // The global event below still gives the balance hook a chance to retry.
+    }
+    window.dispatchEvent(new Event(MODEL_BALANCE_CHANGED));
+  }
 
   const loadOrders = useCallback(async () => {
     const epoch = authEpoch.current;
     const token = readClientToken();
+    const identity = pageCacheIdentity();
     if (!token) { setOrders([]); setOrdersLoading(false); return; }
     setOrdersLoading(true);
     try {
       const next = await fetchRechargeOrders();
-      if (epoch === authEpoch.current && token === readClientToken()) setOrders(next);
+      if (epoch === authEpoch.current && token === readClientToken()) { setOrders(next); writePageCache("recharge-orders", next, identity); }
     }
     catch { /* 未登录或后台不可用 */ }
     finally { if (epoch === authEpoch.current && token === readClientToken()) setOrdersLoading(false); }
@@ -88,7 +102,8 @@ export default function RechargePage() {
     const onAuthChanged = () => {
       authEpoch.current++;
       pollRef.current = null;
-      setOrders([]); setOrdersLoading(false); setCreating(false); setChecking(false);
+      setOrders([]); setConfig(null); setConfigVerified(false); setOrdersLoading(false); setCreating(false); setChecking(false);
+      setConfigRevision((value) => value + 1);
       setPayUrl(null); setPayQrValue(null); setPayQrImage(null); setPayTradeNo(null);
       void loadOrders();
     };
@@ -97,19 +112,60 @@ export default function RechargePage() {
   }, [loadOrders]);
 
   useEffect(() => {
+    let cancelled = false;
+    const identity = pageCacheIdentity();
     (async () => {
       try {
         const result = await fetchRechargeConfig();
+        if (cancelled || identity !== pageCacheIdentity()) return;
         setConfig(result);
+        setConfigVerified(true); setConfigError(null); writePageCache("recharge-config", result, identity);
         const activities = result.activities.filter((activity) => activity.enabled);
         const initial = activities.find((activity) => activity.amount === 30) ?? activities[0];
         if (initial) {
           setSelectedActivityId(initial.id);
           setAmount(String(initial.amount));
         }
-      } catch (error) { setConfigError(error instanceof Error ? error.message : String(error)); }
+      } catch (error) { if (!cancelled && identity === pageCacheIdentity()) { setConfigVerified(false); setConfigError(error instanceof Error ? error.message : String(error)); } }
     })();
     void loadOrders();
+    return () => { cancelled = true; };
+  }, [loadOrders, configRevision]);
+
+  // KyrenPay returns to the Tauri page with a signed success payload. The
+  // server-to-server notify may be delayed or blocked by a proxy, so replay
+  // the signed callback once and then read the authoritative order state.
+  useEffect(() => {
+    if (returnHandled.current || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const outTradeNo = params.get("out_trade_no") || "";
+    if (!outTradeNo || (params.get("trade_status") || "").toUpperCase() !== "TRADE_SUCCESS") return;
+    returnHandled.current = true;
+    const query = params.toString();
+    const reconcile = async () => {
+      try {
+        const confirmation = await confirmRechargeReturn(params);
+        let confirmedOrder = confirmation?.order || null;
+        if (confirmation === null) {
+          const callback = await fetch(`${adminApiUrl("/client/recharge/notify")}?${query}`, { cache: "no-store" });
+          const callbackText = await callback.text();
+          if (!callback.ok || callbackText.trim().toLowerCase() !== "success") throw new Error("后台未确认支付回调");
+        }
+        const order = confirmedOrder || await fetchRechargeOrderStatus(outTradeNo);
+        if (rechargeStatusState(order.status) === "credited") {
+          toast.success("支付成功，余额已到账");
+          await refreshBalanceAfterPayment();
+          void loadOrders();
+        } else {
+          toast.info("支付已确认，后台正在入账，请稍后刷新订单");
+        }
+      } catch (error) {
+        toast.error("支付已返回，但后台尚未确认到账", { description: error instanceof Error ? error.message : String(error) });
+      } finally {
+        window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash}`);
+      }
+    };
+    void reconcile();
   }, [loadOrders]);
 
   useEffect(() => {
@@ -153,7 +209,7 @@ export default function RechargePage() {
         if (epoch !== authEpoch.current || token !== readClientToken() || pollRef.current !== tradeNo) return;
         if (rechargeStatusState(order.status) === "credited") {
           toast.success("充值成功，余额已更新");
-          window.dispatchEvent(new Event(MODEL_BALANCE_CHANGED));
+          await refreshBalanceAfterPayment();
           clearInterval(timer);
           closePaymentDialog();
           void loadOrders();
@@ -177,7 +233,7 @@ export default function RechargePage() {
       const state = rechargeStatusState(order.status);
       if (state === "credited") {
         toast.success("支付已确认，余额已到账");
-        window.dispatchEvent(new Event(MODEL_BALANCE_CHANGED));
+        await refreshBalanceAfterPayment();
         closePaymentDialog();
         void loadOrders();
       } else if (state === "paid") {
@@ -199,6 +255,7 @@ export default function RechargePage() {
   const credited = selectedActivity?.credited ?? amountNumber;
   async function handleCreate() {
     if (demoModeEnabled) { toast.info(DEMO_UNAVAILABLE_MESSAGE); return; }
+    if (!configVerified || !config?.enabled) { toast.error("充值配置尚未更新，请稍后重试"); return; }
     if (!validAmount) { toast.error("请输入 1-4000 之间的充值金额"); return; }
     const epoch = authEpoch.current;
     const token = readClientToken();
@@ -255,10 +312,9 @@ export default function RechargePage() {
           <CardDescription className="mt-1 text-xs">支付金额与到账余额均为人民币</CardDescription>
         </CardHeader>
         <CardContent className="px-4 py-5 sm:px-5">
-          <div className="text-xs font-medium text-muted-foreground">{activities.length ? "充值活动" : "选择充值金额"}</div>
+          <div className="text-xs font-medium text-muted-foreground">充值活动</div>
           <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {activities.length === 0 && PRESET_AMOUNTS.map((preset) => <Button key={preset} type="button" variant={amountNumber === preset ? "default" : "outline"} size="sm" className="rounded-lg" onClick={() => { setSelectedActivityId(null); setAmount(String(preset)); }}>¥{preset}</Button>)}
-            {activities.map((activity) => (
+            {activities.length === 0 ? <div className="col-span-full flex min-h-[82px] items-center justify-center rounded-lg border border-dashed border-border px-3 py-2 text-center text-xs text-muted-foreground">暂无可用充值活动</div> : activities.map((activity) => (
               <button key={activity.id} type="button" onClick={() => { setSelectedActivityId(activity.id); setAmount(String(activity.amount)); }} aria-pressed={selectedActivityId === activity.id}
                 className={cn("flex min-h-[82px] flex-col items-start justify-center gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors", selectedActivityId === activity.id ? "border-primary bg-primary/[0.06]" : "border-border hover:bg-muted/50")}>
                 {activity.label && <span className="w-full truncate text-[11px] text-muted-foreground" title={activity.label}>{activity.label}</span>}
@@ -284,7 +340,7 @@ export default function RechargePage() {
             ))}
           </div>
 
-          <Button type="button" className="mt-5 h-11 w-full rounded-xl text-sm font-semibold" onClick={() => void handleCreate()} disabled={creating || !validAmount || !config?.enabled || demoModeEnabled}>
+          <Button type="button" className="mt-5 h-11 w-full rounded-xl text-sm font-semibold" onClick={() => void handleCreate()} disabled={creating || !validAmount || !config?.enabled || !configVerified || demoModeEnabled}>
             {creating ? <Loader2 className="animate-spin" /> : <Wallet />}立即充值
           </Button>
         </CardContent>

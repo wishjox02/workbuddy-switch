@@ -69,8 +69,12 @@ export async function refreshClientUser(): Promise<ClientUser | null> {
   if (!response.ok || payload.ok === false) throw new Error(serviceDisplayText(payload.error || `读取用户信息失败 (${response.status})`));
   if (!payload.data?.user) throw new Error("用户信息响应无效");
   const user = { ...payload.data.user, sub2apiSync: readClientUser()?.sub2apiSync } as ClientUser;
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-  window.dispatchEvent(new Event(AUTH_EVENT));
+  const serialized = JSON.stringify(user);
+  const previous = localStorage.getItem(USER_KEY);
+  localStorage.setItem(USER_KEY, serialized);
+  // Background profile refresh must not look like an account switch to pages
+  // that clear local state on auth changes (for example redeem history).
+  if (previous !== serialized) window.dispatchEvent(new Event(AUTH_EVENT));
   return user;
 }
 

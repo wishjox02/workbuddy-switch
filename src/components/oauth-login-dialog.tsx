@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Check, CircleAlert, Copy, ExternalLink } from "lucide-react";
+import { Check, CircleAlert, Copy, ExternalLink, FileText, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ import * as api from "@/lib/api";
 import { DEFAULT_VARIANT, variantAppName, variantLabel } from "@/lib/variant";
 import type { AccountMeta, WbVariant } from "@/lib/types";
 import { useAccountsStore } from "@/stores/accounts";
+import { LegalAgreementDialog } from "@/components/legal-agreement-dialog";
+import { type LegalDocument } from "@/lib/legal";
 
 interface Props {
   open: boolean;
@@ -55,6 +58,8 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
   const [error, setError] = useState("");
   const [result, setResult] = useState<AccountMeta | null>(null);
   const [copied, setCopied] = useState(false);
+  const [agreed, setAgreed] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
 
   // 打开时重置
   useEffect(() => {
@@ -65,6 +70,8 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
       setError("");
       setResult(null);
       setCopied(false);
+      setAgreed(false);
+      setLegalDocument(null);
     }
   }, [open]);
 
@@ -102,6 +109,10 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
   }, [loginId, reconcileAccounts]);
 
   async function start() {
+    if (!agreed) {
+      toast.error("请先阅读并同意用户服务协议和隐私政策");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -133,7 +144,8 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{copy.title}（{variantLabel(variant)}）</DialogTitle>
@@ -142,6 +154,7 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
 
         {!loginId && !result && (
           <div className="space-y-3 pt-2">
+            <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/25 px-3 py-2.5"><Checkbox id="oauth-login-agreement" checked={agreed} onCheckedChange={(checked) => setAgreed(checked === true)} className="mt-1" /><label htmlFor="oauth-login-agreement" className="text-xs leading-5 text-muted-foreground">我已阅读并同意 <button type="button" className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline" onClick={() => setLegalDocument("terms")}><FileText className="size-3" />用户服务协议</button> 和 <button type="button" className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline" onClick={() => setLegalDocument("privacy")}><ShieldCheck className="size-3" />隐私政策</button></label></div>
             <Button onClick={start} disabled={busy} className="w-full">
               {busy ? "正在发起登录…" : copy.start}
             </Button>
@@ -212,7 +225,9 @@ export function OAuthLoginDialog({ open, onOpenChange, variant = DEFAULT_VARIANT
           </DialogFooter>
         )}
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <LegalAgreementDialog open={legalDocument !== null} document={legalDocument || "terms"} onOpenChange={(next) => { if (!next) setLegalDocument(null); }} />
+    </>
   );
 }
 

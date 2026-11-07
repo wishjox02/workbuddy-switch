@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { Loader2, MessageCircle, Phone, RefreshCw } from "lucide-react";
+import { FileText, Loader2, MessageCircle, Phone, RefreshCw, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LegalAgreementDialog } from "@/components/legal-agreement-dialog";
 import { fetchLoginCaptcha, loginWithCode, sendLoginCode, type ClientUser, type LoginCaptcha } from "@/lib/auth";
+import { type LegalDocument } from "@/lib/legal";
 
 export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: boolean; onOpenChange: (open: boolean) => void; onLoggedIn: (user: ClientUser) => void }) {
   const [phone, setPhone] = useState("");
@@ -21,6 +24,8 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
   const [captchaLoading, setCaptchaLoading] = useState(false);
   const [captchaOpen, setCaptchaOpen] = useState(false);
   const [pendingPhone, setPendingPhone] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [legalDocument, setLegalDocument] = useState<LegalDocument | null>(null);
   const dialogGeneration = useRef(0);
   const loginAbort = useRef<AbortController | null>(null);
 
@@ -31,7 +36,13 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
     loginAbort.current?.abort();
     loginAbort.current = null;
     setPhone(""); setCode(""); setChallengeId(""); setMaskedPhone(""); setBusy(false); setSending(false);
-    setCaptcha(null); setCaptchaAnswer(""); setCaptchaError(""); setCaptchaLoading(false); setCaptchaOpen(false); setPendingPhone("");
+    setCaptcha(null); setCaptchaAnswer(""); setCaptchaError(""); setCaptchaLoading(false); setCaptchaOpen(false); setPendingPhone(""); setAgreed(false); setLegalDocument(null);
+  }
+
+  function requireAgreement(): boolean {
+    if (agreed) return true;
+    toast.error("请先阅读并同意用户服务协议和隐私政策");
+    return false;
   }
 
   function normalizedPhone(): string | null {
@@ -59,6 +70,7 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
   }
 
   async function requestCode() {
+    if (!requireAgreement()) return;
     const phoneValue = normalizedPhone();
     if (!phoneValue || captchaLoading || sending || challengeId) return;
     const generation = dialogGeneration.current;
@@ -106,6 +118,7 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
   }
 
   async function submit() {
+    if (!requireAgreement()) return;
     if (!challengeId || !code.trim()) { toast.error("请先获取并输入验证码"); return; }
     const generation = dialogGeneration.current;
     const controller = new AbortController();
@@ -123,7 +136,8 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
+    <>
+      <Dialog open={open} onOpenChange={(next) => { onOpenChange(next); if (!next) reset(); }}>
       <DialogContent className="sm:max-w-md">
         {captchaOpen ? (
           <>
@@ -139,11 +153,13 @@ export function ClientLoginDialog({ open, onOpenChange, onLoggedIn }: { open: bo
         ) : (
           <>
             <DialogHeader><DialogTitle>登录小玉米</DialogTitle><DialogDescription>使用手机号验证登录。登录后可同步个人模型配置。</DialogDescription></DialogHeader>
-            <div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="client-login-phone">手机号</Label><div className="relative"><Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="client-login-phone" className="pl-9" placeholder="请输入手机号" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={Boolean(challengeId)} /></div></div><div className="space-y-2"><Label htmlFor="client-login-code">短信验证码</Label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><MessageCircle className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="client-login-code" className="pl-9" placeholder="6 位验证码" value={code} onChange={(event) => setCode(event.target.value)} maxLength={6} /></div><Button type="button" variant="outline" className="min-w-28" onClick={() => void requestCode()} disabled={sending || busy || captchaLoading || Boolean(challengeId) || !phone.trim()}>{captchaLoading ? <Loader2 className="animate-spin" /> : "获取验证码"}</Button></div></div>{maskedPhone && <p className="text-xs text-muted-foreground">验证码已发送至 {maskedPhone}，有效期 5 分钟。</p>}</div>
+            <div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="client-login-phone">手机号</Label><div className="relative"><Phone className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="client-login-phone" className="pl-9" placeholder="请输入手机号" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={Boolean(challengeId)} /></div></div><div className="space-y-2"><Label htmlFor="client-login-code">短信验证码</Label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><MessageCircle className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input id="client-login-code" className="pl-9" placeholder="6 位验证码" value={code} onChange={(event) => setCode(event.target.value)} maxLength={6} /></div><Button type="button" variant="outline" className="min-w-28" onClick={() => void requestCode()} disabled={sending || busy || captchaLoading || Boolean(challengeId) || !phone.trim()}>{captchaLoading ? <Loader2 className="animate-spin" /> : "获取验证码"}</Button></div></div>{maskedPhone && <p className="text-xs text-muted-foreground">验证码已发送至 {maskedPhone}，有效期 5 分钟。</p>}<div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/25 px-3 py-2.5"><Checkbox id="client-login-agreement" checked={agreed} onCheckedChange={(checked) => setAgreed(checked === true)} className="mt-1" /><label htmlFor="client-login-agreement" className="text-xs leading-5 text-muted-foreground">我已阅读并同意 <button type="button" className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline" onClick={() => setLegalDocument("terms")}><FileText className="size-3" />用户服务协议</button> 和 <button type="button" className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline" onClick={() => setLegalDocument("privacy")}><ShieldCheck className="size-3" />隐私政策</button></label></div></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => { onOpenChange(false); reset(); }}>取消</Button><Button type="button" onClick={() => void submit()} disabled={busy || !challengeId}>{busy ? <Loader2 className="animate-spin" /> : null}登录</Button></DialogFooter>
           </>
         )}
       </DialogContent>
-    </Dialog>
+      </Dialog>
+      <LegalAgreementDialog open={legalDocument !== null} document={legalDocument || "terms"} onOpenChange={(open) => { if (!open) setLegalDocument(null); }} />
+    </>
   );
 }

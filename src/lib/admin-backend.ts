@@ -1,7 +1,7 @@
 const ADMIN_BACKEND_STORAGE_KEY = "workbuddy.admin-backend-url.v1";
 const LOCAL_ADMIN_BACKEND_URL = "http://127.0.0.1:57900";
 /** 线上后台 API 根地址：打包后的客户端默认接入这里。 */
-const DEFAULT_ADMIN_BACKEND_URL = "https://woai.info/admin/api";
+const DEFAULT_ADMIN_BACKEND_URL = "https://admin.woai.info/api";
 const SESSION_TOKEN_KEY = "workbuddy.client.session-token.v1";
 const SESSION_USER_KEY = "workbuddy.client.user.v1";
 const AUTH_CHANGED_EVENT = "workbuddy-auth-changed";

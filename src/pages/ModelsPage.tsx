@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, Bot, Box, ChevronDown, Cpu, Gauge, Loader2, PowerOff, RefreshCw, RotateCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Boxes, Bot, Box, ChevronDown, Copy, Cpu, Eye, EyeOff, Gauge, KeyRound, Loader2, Plus, PowerOff, RefreshCw, RotateCw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { siClaude, siDeepseek, siGooglegemini, siKimi, siMeta, siMistralai, siQwen, siBytedance } from "simple-icons";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,20 +11,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { DEMO_UNAVAILABLE_MESSAGE, demoModeEnabled } from "@/lib/demo-mode";
-import { authChangedEvent, readClientToken } from "@/lib/auth";
+import { authChangedEvent, readClientToken, readClientUser } from "@/lib/auth";
 import { isDesktop } from "@/lib/api";
 import { groupModelCatalog, isOurModel, mergeModelCatalog, type ModelDefinition } from "@/lib/model-catalog";
 import { serviceDisplayText } from "@/lib/admin-backend";
-import { MODEL_BALANCE_CHANGED, useModelBalance } from "@/lib/use-model-balance";
 import {
   disableModelFromDsh, disableModelFromWorkBuddy, enableModelFromDsh, enableModelFromWorkBuddy,
-  fetchDshModels, fetchSub2ApiModels, fetchWorkBuddyModels, hasSub2ApiBackend,
+  createUserApiKey, deleteUserApiKey, fetchDshModels, fetchModelConnection, fetchSub2ApiModels, fetchUserApiKeys, fetchWorkBuddyModels, hasSub2ApiBackend,
   importModelsToDsh, importModelsToWorkBuddy,
   syncWorkBuddyConnection,
   removeThirdPartyModelFromDsh, removeThirdPartyModelFromWorkBuddy, restartDeepSeekHarness, testSub2ApiSpeed,
-  type DshModel, type Sub2ApiModel, type WorkBuddyModel, type WorkBuddyModelInput,
+  type DshModel, type Sub2ApiModel, type UserApiKey, type WorkBuddyModel, type WorkBuddyModelInput,
 } from "@/lib/sub2api";
 import { cn } from "@/lib/utils";
+import { pageCacheIdentity, readPageCache, writePageCache } from "@/lib/page-cache";
 
 function toModelDefinition(model: Sub2ApiModel | WorkBuddyModel | DshModel): ModelDefinition {
   const remote = model as Sub2ApiModel;
@@ -76,10 +75,8 @@ const TARGET_META: Record<TargetApp, { appLabel: string }> = {
 };
 
 export default function ModelsPage() {
-  const navigate = useNavigate();
-  const { balance, loading: balanceLoading } = useModelBalance();
   const [target, setTarget] = useState<TargetApp>("workbuddy");
-  const [catalog, setCatalog] = useState<ModelDefinition[]>([]);
+  const [catalog, setCatalog] = useState<ModelDefinition[]>(() => readPageCache<ModelDefinition[]>("model-catalog") ?? []);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [connectionReady, setConnectionReady] = useState(false);
   const [importedWorkBuddy, setImportedWorkBuddy] = useState<WorkBuddyModel[]>([]);
@@ -96,6 +93,21 @@ export default function ModelsPage() {
   const [removeTarget, setRemoveTarget] = useState<ModelDefinition | null>(null);
   const [restartingHarness, setRestartingHarness] = useState(false);
   const [loggedIn, setLoggedIn] = useState(() => Boolean(readClientToken()));
+  const [apiOpen, setApiOpen] = useState(false);
+  const [apiConnection, setApiConnection] = useState<{ baseUrl: string; apiKey: string } | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeys, setApiKeys] = useState<UserApiKey[]>([]);
+  const [apiKeysLoading, setApiKeysLoading] = useState(false);
+  const [apiKeysError, setApiKeysError] = useState("");
+  const [apiKeyName, setApiKeyName] = useState("");
+  const [creatingApiKey, setCreatingApiKey] = useState(false);
+  const [createdApiKey, setCreatedApiKey] = useState("");
+  const [showCreatedApiKey, setShowCreatedApiKey] = useState(false);
+  const [deleteApiKeyTarget, setDeleteApiKeyTarget] = useState<UserApiKey | null>(null);
+  const [deletingApiKey, setDeletingApiKey] = useState(false);
+  const apiGeneration = useRef(0);
   const syncGeneration = useRef(0);
   const authGeneration = useRef(0);
 
@@ -103,8 +115,9 @@ export default function ModelsPage() {
   useEffect(() => { window.dispatchEvent(new Event("model-list-changed")); }, [importedWorkBuddy]);
   async function syncModels() {
     const token = readClientToken();
+    const identity = pageCacheIdentity();
     const generation = ++syncGeneration.current;
-    const isCurrent = () => generation === syncGeneration.current && token === readClientToken();
+    const isCurrent = () => generation === syncGeneration.current && token === readClientToken() && identity === pageCacheIdentity();
     setLoggedIn(Boolean(token));
     setRemoteLoading(true); setRemoteError(null); setConnectionReady(false);
     try {
@@ -127,8 +140,8 @@ export default function ModelsPage() {
       ]);
       if (!isCurrent()) return;
       const errors: string[] = connectionError ? [`WorkBuddy 连接：${connectionError}`] : [];
-      if (remote.status === "fulfilled") { setCatalog(dedupeModels(remote.value).map(toModelDefinition)); setCatalogLoaded(Boolean(token)); }
-      else { setCatalog([]); setCatalogLoaded(false); errors.push(`远端模型：${String(remote.reason)}`); }
+      if (remote.status === "fulfilled") { const models = dedupeModels(remote.value).map(toModelDefinition); setCatalog(models); writePageCache("model-catalog", models, identity); setCatalogLoaded(Boolean(token)); }
+      else { setCatalogLoaded(false); errors.push(`远端模型：${String(remote.reason)}`); }
       if (workBuddy.status === "fulfilled") setImportedWorkBuddy(dedupeModels(workBuddy.value));
       else errors.push(`本机 WorkBuddy：${String(workBuddy.reason)}`);
       if (dsh.status === "fulfilled") setImportedDsh(dsh.value);
@@ -144,8 +157,16 @@ export default function ModelsPage() {
   }
 
   useEffect(() => {
+    let lastToken = readClientToken();
+    let lastUserId = readClientUser()?.id ?? null;
     const handleAuthChanged = () => {
+      const token = readClientToken();
+      const userId = readClientUser()?.id ?? null;
+      if (token === lastToken && userId === lastUserId) return;
+      lastToken = token;
+      lastUserId = userId;
       ++authGeneration.current;
+      ++apiGeneration.current; setApiOpen(false); setApiConnection(null); setShowApiKey(false); setApiLoading(false);
       setCatalog([]); setCatalogLoaded(false); setImportedWorkBuddy([]); setImportedDsh([]);
       setConnectionReady(false); setRemoteError(null); setSpeedMessage(null); setSpeedLoading(false); setRemoveTarget(null);
       setBusyIds([]); setGroupBusy(false); setRemoveGroup(null);
@@ -153,7 +174,7 @@ export default function ModelsPage() {
     };
     window.addEventListener(authChangedEvent(), handleAuthChanged);
     void syncModels();
-    return () => { ++syncGeneration.current; ++authGeneration.current; window.removeEventListener(authChangedEvent(), handleAuthChanged); };
+    return () => { ++syncGeneration.current; ++authGeneration.current; ++apiGeneration.current; window.removeEventListener(authChangedEvent(), handleAuthChanged); };
   }, []);
 
   const importedDefinitions = useMemo(() => importedModels.map(toModelDefinition), [importedModels]);
@@ -316,28 +337,50 @@ export default function ModelsPage() {
     }
   }
 
-  const meta = TARGET_META[target];
-  const enabledOurModels = importedModels.filter((model) => model.managed && !model.disabled).length;
-  const guide = !loggedIn
-    ? { title: "登录后使用小玉米模型", detail: "登录后可充值、启用模型并查看使用记录。", action: "登录", run: () => window.dispatchEvent(new Event("open-client-login")) }
-    : balanceLoading || remoteLoading
-      ? { title: "正在检查模型服务状态", detail: "正在读取余额与模型配置。", action: "", run: () => {} }
-      : balance === null
-        ? { title: "余额暂不可用", detail: "无法确认当前余额，请检查网络后重试。", action: "重试", run: () => window.dispatchEvent(new Event(MODEL_BALANCE_CHANGED)) }
-        : balance <= 0
-          ? { title: "模型服务余额不足", detail: "小玉米模型按实际用量扣费，充值后可使用。WorkBuddy 积分与模型服务余额相互独立。", action: "去充值", run: () => navigate("/recharge") }
-          : remoteError || !catalogLoaded || (target === "workbuddy" && !connectionReady)
-            ? { title: "模型连接尚未就绪", detail: "请同步模型并检查连接状态。", action: "重新同步", run: () => void syncModels() }
-            : enabledOurModels === 0
-              ? { title: `选择模型并启用到 ${meta.appLabel}`, detail: "在下方“我们的模型”分组中打开需要的模型。", action: "查看模型", run: () => document.getElementById("model-list")?.scrollIntoView({ behavior: "smooth" }) }
-              : { title: `${meta.appLabel} 已启用 ${enabledOurModels} 个小玉米模型`, detail: target === "workbuddy" ? "请在 WorkBuddy 的模型选择器中选择；如未显示，请重启 WorkBuddy。" : "请核对 Harness 的 API Key，然后在 Harness 中选择模型。", action: "查看使用记录", run: () => navigate("/model-usage") };
+  async function openApi() {
+    const generation = ++apiGeneration.current;
+    setApiOpen(true); setApiConnection(null); setApiKeys([]); setShowApiKey(false); setApiError(""); setApiKeysError(""); setCreatedApiKey(""); setShowCreatedApiKey(false); setApiLoading(true); setApiKeysLoading(true);
+    const [connection, keys] = await Promise.allSettled([fetchModelConnection(), fetchUserApiKeys()]);
+    if (generation === apiGeneration.current) {
+      if (connection.status === "fulfilled") setApiConnection(connection.value);
+      else setApiError(connection.reason instanceof Error ? connection.reason.message : String(connection.reason));
+      if (keys.status === "fulfilled") setApiKeys(keys.value);
+      else setApiKeysError(keys.reason instanceof Error ? keys.reason.message : String(keys.reason));
+      setApiLoading(false); setApiKeysLoading(false);
+    }
+  }
 
+  async function copyApiValue(value: string) {
+    try { await navigator.clipboard.writeText(value); toast.success("已复制"); }
+    catch { toast.error("复制失败，请手动复制"); }
+  }
+
+  async function createApiKey() {
+    const name = apiKeyName.trim();
+    if (!name) { toast.error("请输入 API Key 名称"); return; }
+    setCreatingApiKey(true); setApiKeysError("");
+    try {
+      const result = await createUserApiKey(name);
+      setApiKeys((current) => [{ ...result.key, isDefault: false }, ...current]);
+      setCreatedApiKey(result.apiKey); setShowCreatedApiKey(false); setApiKeyName("");
+      toast.success("API Key 已创建", { description: "完整 Key 只在创建结果中返回，请立即复制保存。" });
+    } catch (error) { setApiKeysError(error instanceof Error ? error.message : String(error)); }
+    finally { setCreatingApiKey(false); }
+  }
+
+  async function confirmDeleteApiKey() {
+    const target = deleteApiKeyTarget;
+    if (!target || target.isDefault || target.id == null) return;
+    setDeletingApiKey(true);
+    try { await deleteUserApiKey(target.id); setApiKeys((current) => current.filter((item) => item.id !== target.id)); setDeleteApiKeyTarget(null); toast.success("API Key 已删除"); }
+    catch (error) { toast.error(error instanceof Error ? error.message : String(error)); }
+    finally { setDeletingApiKey(false); }
+  }
+
+  const meta = TARGET_META[target];
   return <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
-    <header className="mb-7 flex min-w-0 flex-wrap items-start justify-between gap-4"><div className="min-w-0"><h1 className="text-[28px] font-semibold tracking-tight">模型与启用</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">启用小玉米模型，管理 WorkBuddy 与 DeepSeek Harness 的模型配置。</p></div><div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2"><div className="inline-flex min-w-0 rounded-xl border border-border bg-muted/40 p-1"><button type="button" onClick={() => setTarget("workbuddy")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors", target === "workbuddy" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}><Boxes className="size-3.5" />WorkBuddy</button><button type="button" onClick={() => setTarget("dsh")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors", target === "dsh" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}><Bot className="size-3.5" />Harness</button></div><Button type="button" variant="outline" size="sm" onClick={() => void syncModels()} disabled={remoteLoading}><RefreshCw className={cn(remoteLoading && "animate-spin")} />同步模型</Button><Button type="button" variant="outline" size="sm" onClick={() => void testSpeed()} disabled={speedLoading}>{speedLoading ? <Loader2 className="animate-spin" /> : <Gauge />}测试速度</Button></div></header>
-    <section className="mb-5 flex flex-wrap items-center justify-between gap-4 border-y border-border bg-primary/[0.035] px-4 py-4" aria-label="模型服务状态">
-      <div className="min-w-0"><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><h2 className="text-sm font-semibold">{guide.title}</h2><span className="text-xs tabular-nums text-muted-foreground">模型服务余额 {balanceLoading ? "加载中…" : balance === null ? "—" : `¥${balance.toFixed(2)}`}</span></div><p className="mt-1 text-xs leading-5 text-muted-foreground">{guide.detail}</p></div>
-      {guide.action && <Button type="button" size="sm" onClick={guide.run}>{guide.action}</Button>}
-    </section>
+    <header className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3"><div className="min-w-0"><h1 className="text-[28px] font-semibold tracking-tight">我的模型</h1></div><div className="flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-2"><Button type="button" variant="outline" size="sm" onClick={() => void openApi()}><KeyRound />API Key</Button><Button type="button" variant="outline" size="sm" onClick={() => void syncModels()} disabled={remoteLoading}><RefreshCw className={cn(remoteLoading && "animate-spin")} />同步模型</Button><Button type="button" variant="outline" size="sm" onClick={() => void testSpeed()} disabled={speedLoading}>{speedLoading ? <Loader2 className="animate-spin" /> : <Gauge />}测试速度</Button></div></header>
+    <div className="mb-5 flex min-w-0 items-center"><div className="inline-flex min-w-0 rounded-xl border border-border bg-muted/40 p-1"><button type="button" onClick={() => setTarget("workbuddy")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors", target === "workbuddy" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}><Boxes className="size-3.5" />WorkBuddy</button><button type="button" onClick={() => setTarget("dsh")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors", target === "dsh" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}><Bot className="size-3.5" />Harness</button></div></div>
     <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3">
       {(remoteLoading || remoteError || speedMessage || !loggedIn) && <p className="min-w-0 max-w-md truncate text-xs text-muted-foreground" title={serviceDisplayText(remoteError || speedMessage || "") || undefined} role="status">{remoteLoading ? "正在加载模型…" : remoteError ? `读取失败：${serviceDisplayText(remoteError)}` : speedMessage ? serviceDisplayText(speedMessage) : "登录后可加载远端模型"}</p>}
     </div>
@@ -367,6 +410,18 @@ export default function ModelsPage() {
       })}</section>;
       })}</CardContent>
     </Card>
+
+    <Dialog open={apiOpen} onOpenChange={(open) => { if (!open) { ++apiGeneration.current; setApiOpen(false); setApiConnection(null); setShowApiKey(false); setApiLoading(false); } }}>
+      <DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>API Key 管理</DialogTitle><DialogDescription>Base URL 由后台模型服务配置提供，默认 Key 不可删除。</DialogDescription></DialogHeader>
+        {apiLoading ? <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />正在获取连接信息</div> : apiError ? <div className="text-sm text-destructive" role="alert">{apiError}</div> : apiConnection && <div className="space-y-4">
+          <div><label htmlFor="api-base-url" className="text-sm font-medium">Base URL</label><div className="mt-1.5 flex gap-2"><Input id="api-base-url" readOnly value={apiConnection.baseUrl} /><Button variant="outline" size="icon" title="复制 Base URL" aria-label="复制 Base URL" onClick={() => void copyApiValue(apiConnection.baseUrl)}><Copy /></Button></div></div>
+          <div><label htmlFor="api-key" className="text-sm font-medium">API Key</label><div className="mt-1.5 flex gap-2"><Input id="api-key" readOnly type={showApiKey ? "text" : "password"} value={apiConnection.apiKey} /><Button variant="outline" size="icon" title={showApiKey ? "隐藏 API Key" : "显示 API Key"} aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"} onClick={() => setShowApiKey(!showApiKey)}>{showApiKey ? <EyeOff /> : <Eye />}</Button><Button variant="outline" size="icon" title="复制 API Key" aria-label="复制 API Key" onClick={() => void copyApiValue(apiConnection.apiKey)}><Copy /></Button></div></div>
+          <div className="border-t border-border/60 pt-4"><div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold">我的 API Keys</h3>{apiKeysLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}</div><div className="mt-3 flex gap-2"><Input value={apiKeyName} onChange={(event) => setApiKeyName(event.target.value)} placeholder="新 Key 名称" maxLength={80} onKeyDown={(event) => { if (event.key === "Enter") void createApiKey(); }} /><Button type="button" onClick={() => void createApiKey()} disabled={creatingApiKey || !apiKeyName.trim()}>{creatingApiKey ? <Loader2 className="animate-spin" /> : <Plus />}创建</Button></div>{apiKeysError && <p className="mt-2 text-xs text-destructive" role="alert">{apiKeysError}</p>}{createdApiKey && <div className="mt-3 rounded-md border border-primary/25 bg-primary/5 p-3"><p className="text-xs text-muted-foreground">新 Key 仅完整显示在这里，请立即复制。</p><div className="mt-2 flex gap-2"><Input readOnly type={showCreatedApiKey ? "text" : "password"} value={createdApiKey} /><Button type="button" variant="outline" size="icon" onClick={() => setShowCreatedApiKey((value) => !value)} aria-label={showCreatedApiKey ? "隐藏新 API Key" : "显示新 API Key"}>{showCreatedApiKey ? <EyeOff /> : <Eye />}</Button><Button type="button" variant="outline" size="icon" onClick={() => void copyApiValue(createdApiKey)} aria-label="复制新 API Key"><Copy /></Button></div></div>}{apiKeys.length > 0 && <div className="mt-3 divide-y rounded-md border">{apiKeys.map((item) => <div key={String(item.id ?? item.name)} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><div className="truncate text-sm font-medium">{item.name || "未命名 Key"}{item.isDefault && <span className="ml-2 text-[10px] font-medium text-primary">默认</span>}</div><div className="text-xs text-muted-foreground">••••{item.apiKeyLast4 || "????"}{item.status ? ` · ${item.status}` : ""}</div></div>{item.isDefault ? <span className="shrink-0 text-xs text-muted-foreground">不可删除</span> : <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-destructive" onClick={() => setDeleteApiKeyTarget(item)} aria-label={`删除 ${item.name || "API Key"}`} title="删除 API Key"><Trash2 /></Button>}</div>)}</div>}{!apiKeysLoading && !apiKeysError && apiKeys.length === 0 && <p className="mt-3 text-xs text-muted-foreground">暂无可管理的 API Key。</p>}</div>
+        </div>}
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={deleteApiKeyTarget !== null} onOpenChange={(open) => { if (!open && !deletingApiKey) setDeleteApiKeyTarget(null); }}><DialogContent><DialogHeader><DialogTitle>删除 API Key</DialogTitle><DialogDescription>确定删除「{deleteApiKeyTarget?.name || "API Key"}」吗？删除后使用该 Key 的外部平台将无法继续调用。</DialogDescription></DialogHeader><DialogFooter><Button type="button" variant="outline" onClick={() => setDeleteApiKeyTarget(null)} disabled={deletingApiKey}>取消</Button><Button type="button" variant="destructive" onClick={() => void confirmDeleteApiKey()} disabled={deletingApiKey}>{deletingApiKey ? <Loader2 className="animate-spin" /> : <Trash2 />}确认删除</Button></DialogFooter></DialogContent></Dialog>
 
     {/* 单个模型删除确认（桌面 App 不支持 window.confirm） */}
     <Dialog open={removeTarget !== null} onOpenChange={(open) => { if (!open) setRemoveTarget(null); }}>

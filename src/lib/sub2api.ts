@@ -46,6 +46,21 @@ function isSafeModelBaseUrl(value: unknown): value is string {
   }
 }
 
+export async function fetchModelConnection(): Promise<{ baseUrl: string; apiKey: string }> {
+  const token = readClientToken();
+  const userId = readClientUser()?.id;
+  if (!token || !userId) throw new Error("请先登录个人中心");
+  const response = await fetch(adminApiUrl("/client/models/connection"), {
+    method: "POST", cache: "no-store", headers: { Authorization: `Bearer ${token}` },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (token !== readClientToken() || userId !== readClientUser()?.id) throw new Error("登录状态已变化，请重新打开 API");
+  if (!response.ok || payload.ok === false) throw new Error(serviceDisplayText(payload.error || `读取模型连接失败 (${response.status})`));
+  const connection = payload.data;
+  if (Number(connection?.userId) !== userId || !isSafeModelBaseUrl(connection?.baseUrl) || !/^sk-/.test(connection?.apiKey || "")) throw new Error("后台返回的模型连接无效");
+  return { baseUrl: connection.baseUrl, apiKey: connection.apiKey };
+}
+
 export function hasSub2ApiBackend(): boolean {
   return Boolean(adminBackendUrl());
 }
@@ -103,7 +118,7 @@ export interface CustomModelUsagePage {
   total: number;
   page: number;
   pageSize: number;
-  summary: { requests: number; inputTokens: number; outputTokens: number; totalTokens: number; costCny: number | null };
+  summary: { requests: number | null; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null; costCny: number | null };
   exchangeRate: number;
 }
 
@@ -144,17 +159,17 @@ function normalizeCustomModelUsage(data: Record<string, unknown>): CustomModelUs
         };
       })
     : [];
-  const summaryCost = numberOrNull(firstPresent(rawSummary, ["costCny", "total_actual_cost", "actual_cost", "cost"]));
+  const summaryCost = numberOrNull(firstPresent(rawSummary, ["costCny", "total_actual_cost", "totalActualCost", "total_cost", "totalCost", "actual_cost", "cost"]));
   return {
     records,
     total: numberOrZero(firstPresent(data, ["total", "count"])) || records.length,
     page: numberOrZero(data.page) || 1,
     pageSize: numberOrZero(firstPresent(data, ["pageSize", "page_size"])) || 50,
     summary: {
-      requests: numberOrZero(firstPresent(rawSummary, ["requests", "total_requests", "request_count", "totalRequests"])),
-      inputTokens: numberOrZero(firstPresent(rawSummary, ["inputTokens", "total_input_tokens", "input_tokens", "prompt_tokens", "totalInputTokens"])),
-      outputTokens: numberOrZero(firstPresent(rawSummary, ["outputTokens", "total_output_tokens", "output_tokens", "completion_tokens", "totalOutputTokens"])),
-      totalTokens: numberOrZero(firstPresent(rawSummary, ["totalTokens", "total_tokens"])),
+      requests: numberOrNull(firstPresent(rawSummary, ["requests", "total_requests", "request_count", "totalRequests"])) ?? numberOrNull(firstPresent(data, ["total", "count"])),
+      inputTokens: numberOrNull(firstPresent(rawSummary, ["inputTokens", "total_input_tokens", "input_tokens", "prompt_tokens", "totalInputTokens"])),
+      outputTokens: numberOrNull(firstPresent(rawSummary, ["outputTokens", "total_output_tokens", "output_tokens", "completion_tokens", "totalOutputTokens"])),
+      totalTokens: numberOrNull(firstPresent(rawSummary, ["totalTokens", "total_tokens"])),
       costCny: summaryCost,
     },
     exchangeRate: numberOrZero(data.exchangeRate) || 1,
@@ -499,6 +514,9 @@ async function rechargeRequest(path: string, init?: RequestInit): Promise<any> {
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.ok === false) {
+    if (response.status === 404 && path.includes("/client/redeem")) {
+      throw new Error("当前后台尚未部署兑换接口，请更新后台服务后重试");
+    }
     throw new Error(serviceDisplayText(payload.error || `充值请求失败 (${response.status})`));
   }
   return payload.data || {};
@@ -545,4 +563,94 @@ export async function fetchRechargeOrders(): Promise<RechargeOrder[]> {
 export async function fetchRechargeOrderStatus(outTradeNo: string): Promise<RechargeOrder> {
   const result = await rechargeRequest(`/api/client/recharge/status?outTradeNo=${encodeURIComponent(outTradeNo)}`, { method: "GET" });
   return result.order;
+}
+
+/** Confirm a signed payment return on newer backends; null means legacy backend. */
+export async function confirmRechargeReturn(params: URLSearchParams): Promise<{ order: RechargeOrder | null } | null> {
+  const response = await fetch(adminApiUrl("/client/recharge/confirm"), {
+    method: "POST", cache: "no-store", headers: { "Content-Type": "application/json", ...clientAuthHeaders() },
+    body: JSON.stringify(Object.fromEntries(params.entries())),
+  });
+  if (response.status === 404) return null;
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) throw new Error(serviceDisplayText(payload.error || `确认支付失败 (${response.status})`));
+  const order = payload.data?.order;
+  return { order: order && typeof order === "object" ? order as RechargeOrder : null };
+}
+
+export interface RedeemResult { credits: number; balance: number }
+
+export interface UserApiKey {
+  id: string | number | null;
+  name: string;
+  apiKeyLast4?: string | null;
+  isDefault?: boolean;
+  status?: string | null;
+  createdAt?: string | number | null;
+  expiresAt?: string | number | null;
+}
+
+async function userApiKeysRequest(path: string, init?: RequestInit): Promise<any> {
+  const base = adminBackendUrl();
+  if (!base) throw new Error("未配置后台地址，请在设置 → 后台服务中填写");
+  const response = await fetch(adminApiUrl(path), {
+    ...init,
+    headers: { "Content-Type": "application/json", ...clientAuthHeaders(), ...(init?.headers || {}) },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.ok === false) throw new Error(serviceDisplayText(payload.error || `API Key 请求失败 (${response.status})`));
+  return payload.data || {};
+}
+
+export async function fetchUserApiKeys(): Promise<UserApiKey[]> {
+  const result = await userApiKeysRequest("/api/client/api-keys?page=1&page_size=100", { method: "GET" });
+  return Array.isArray(result.items) ? result.items : [];
+}
+
+export async function createUserApiKey(name: string): Promise<{ key: UserApiKey; apiKey: string }> {
+  const result = await userApiKeysRequest("/api/client/api-keys", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+  return { key: result, apiKey: String(result.apiKey || "") };
+}
+
+export async function deleteUserApiKey(id: string | number): Promise<void> {
+  await userApiKeysRequest(`/api/client/api-keys/${encodeURIComponent(String(id))}`, { method: "DELETE" });
+}
+
+export interface RedeemHistoryItem {
+  id: string | number | null;
+  code: string;
+  type: string;
+  value: number | null;
+  usedAt: string | number | null;
+}
+export interface RedeemHistoryPage { items: RedeemHistoryItem[]; total: number; page: number; pageSize: number }
+
+export async function fetchRedeemHistory(page = 1, pageSize = 20): Promise<RedeemHistoryPage> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  const response = await fetch(`${adminApiUrl("/client/redeem/history")}?${params}`, { cache: "no-store", headers: clientAuthHeaders() });
+  const payload = await response.json().catch(() => ({}));
+  if (response.status === 404) throw new Error("后台尚未部署兑换记录接口");
+  if (!response.ok || payload.ok === false) throw new Error(serviceDisplayText(payload.error || `读取兑换记录失败 (${response.status})`));
+  const data: unknown = payload.data;
+  const object = data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : null;
+  const rows = Array.isArray(data) ? data : object?.items;
+  if (!Array.isArray(rows)) throw new Error("兑换记录响应格式无效");
+  const items = rows.filter((row): row is Record<string, unknown> => Boolean(row && typeof row === "object" && !Array.isArray(row))).map((row) => {
+    const rawValue = row.value ?? row.amount;
+    const number = rawValue === null || rawValue === undefined || rawValue === "" ? null : Number(rawValue);
+    const date = row.used_at ?? row.usedAt ?? row.created_at ?? row.createdAt;
+    return { id: typeof row.id === "string" || typeof row.id === "number" ? row.id : null, code: typeof row.code === "string" ? row.code : "", type: typeof row.type === "string" ? row.type : "", value: number !== null && Number.isFinite(number) ? number : null, usedAt: typeof date === "string" || typeof date === "number" ? date : null };
+  });
+  const total = Number(object?.total);
+  return { items, total: object && Number.isFinite(total) && total >= 0 ? total : items.length, page, pageSize };
+}
+
+export async function redeemCode(code: string): Promise<RedeemResult> {
+  const result = await rechargeRequest("/api/client/redeem", {
+    method: "POST", body: JSON.stringify({ code: code.trim() }),
+  });
+  const credits = Number(result.credits);
+  const balance = Number(result.balance);
+  if (!Number.isFinite(credits) || !Number.isFinite(balance)) throw new Error("兑换结果无效");
+  return { credits, balance };
 }

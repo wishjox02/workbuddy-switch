@@ -14,6 +14,12 @@ pub fn now_secs() -> i64 {
         .unwrap_or_default()
 }
 
+fn redemption_code_hash(code: &str) -> String {
+    let mut digest = Sha256::new();
+    digest.update(code.trim().to_ascii_uppercase().as_bytes());
+    format!("{:x}", digest.finalize())
+}
+
 fn utc_day(timestamp: i64) -> String {
     // UTC day key is sufficient for aggregate reporting and avoids a timezone dependency.
     let days = timestamp.div_euclid(86_400);
@@ -402,6 +408,14 @@ impl AdminStore {
                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
              );
              CREATE INDEX IF NOT EXISTS idx_credit_ledger_user ON credit_ledger(user_id, id DESC);
+             CREATE TABLE IF NOT EXISTS redemption_codes (
+               code_hash TEXT PRIMARY KEY,
+               credits REAL NOT NULL,
+               used_by INTEGER,
+               used_at INTEGER,
+               created_at INTEGER NOT NULL,
+               FOREIGN KEY(used_by) REFERENCES users(id) ON DELETE SET NULL
+             );
              CREATE TABLE IF NOT EXISTS token_usage_records (
                id INTEGER PRIMARY KEY AUTOINCREMENT,
                user_id INTEGER NOT NULL,
@@ -465,6 +479,20 @@ impl AdminStore {
             "ALTER TABLE sms_challenges ADD COLUMN out_id TEXT NOT NULL DEFAULT ''",
         ] {
             let _ = connection.execute(statement, []);
+        }
+        // Optional deployment seed: `CODE=credits,CODE2=credits`.
+        if let Ok(seed) = std::env::var("WB_REDEEM_CODES") {
+            let now = now_secs();
+            for item in seed.split([',', '\n', ';']) {
+                let Some((code, amount)) = item.split_once(['=', ':']) else { continue; };
+                let code = code.trim();
+                let Ok(credits) = amount.trim().parse::<f64>() else { continue; };
+                if code.len() < 4 || code.len() > 128 || !credits.is_finite() || credits <= 0.0 { continue; }
+                connection.execute(
+                    "INSERT OR IGNORE INTO redemption_codes (code_hash, credits, created_at) VALUES (?1, ?2, ?3)",
+                    params![redemption_code_hash(code), credits, now],
+                )?;
+            }
         }
         Ok(Self { connection: Mutex::new(connection) })
     }
@@ -697,6 +725,38 @@ impl AdminStore {
             id: row.get(0)?, user_id: row.get(1)?, delta: row.get(2)?, balance_after: row.get(3)?, kind: row.get(4)?, reference: row.get(5)?, note: row.get(6)?, operator: row.get(7)?, created_at: row.get(8)?,
         }))?;
         rows.collect()
+    }
+
+    pub fn redeem_code(&self, user_id: i64, code: &str) -> Result<Option<(f64, f64)>, String> {
+        let normalized = code.trim().to_ascii_uppercase();
+        if normalized.len() < 4 || normalized.len() > 128 {
+            return Err("兑换码格式不正确".to_string());
+        }
+        let mut connection = self.connection.lock().expect("admin db mutex poisoned");
+        let transaction = connection.transaction().map_err(|error| error.to_string())?;
+        let row: Option<(f64, Option<i64>)> = transaction.query_row(
+            "SELECT credits, used_by FROM redemption_codes WHERE code_hash=?1",
+            [redemption_code_hash(&normalized)],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(|error| error.to_string())?;
+        let Some((credits, used_by)) = row else { return Err("兑换码无效或不存在".to_string()); };
+        if used_by.is_some() { return Err("兑换码已使用".to_string()); }
+        let current: Option<f64> = transaction.query_row("SELECT credits FROM users WHERE id=?1", [user_id], |row| row.get(0)).optional().map_err(|error| error.to_string())?;
+        let Some(current) = current else { return Ok(None); };
+        let balance = current + credits;
+        let now = now_secs();
+        let changed = transaction.execute(
+            "UPDATE redemption_codes SET used_by=?1, used_at=?2 WHERE code_hash=?3 AND used_by IS NULL",
+            params![user_id, now, redemption_code_hash(&normalized)],
+        ).map_err(|error| error.to_string())?;
+        if changed != 1 { return Err("兑换码已使用".to_string()); }
+        transaction.execute("UPDATE users SET credits=?1 WHERE id=?2", params![balance, user_id]).map_err(|error| error.to_string())?;
+        transaction.execute(
+            "INSERT INTO credit_ledger (user_id, delta, balance_after, kind, reference, note, operator, created_at) VALUES (?1, ?2, ?3, 'redeem', ?4, '兑换码兑换', 'client', ?5)",
+            params![user_id, credits, balance, normalized, now],
+        ).map_err(|error| error.to_string())?;
+        transaction.commit().map_err(|error| error.to_string())?;
+        Ok(Some((credits, balance)))
     }
 
     pub fn insert_token_usage_record(&self, record: &TokenUsageRecord, user_id: i64) -> rusqlite::Result<()> {

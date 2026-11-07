@@ -9,14 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { authChangedEvent, readClientToken } from "@/lib/auth";
 import { fetchCustomModelUsage, type CustomModelUsagePage, type CustomModelUsageRecord } from "@/lib/sub2api";
 import { cn } from "@/lib/utils";
+import { pageCacheIdentity, readPageCache, writePageCache } from "@/lib/page-cache";
 
-type Range = "today" | "7d" | "30d" | "all";
+type Range = "today" | "7d" | "30d" | "custom";
 const PAGE_SIZE = 50;
 const ranges: { value: Range; label: string }[] = [
   { value: "today", label: "今天" },
   { value: "7d", label: "近 7 天" },
   { value: "30d", label: "近 30 天" },
-  { value: "all", label: "全部" },
 ];
 const tokens = new Intl.NumberFormat("zh-CN");
 const yuan = new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2, maximumFractionDigits: 6 });
@@ -39,12 +39,15 @@ function money(value: number | null | undefined): string {
 }
 
 export function CustomModelUsageTab({ reload }: { reload: number }) {
-  const [range, setRange] = useState<Range>("all");
+  const [range, setRange] = useState<Range>("today");
   const [draftModel, setDraftModel] = useState("");
   const [model, setModel] = useState("");
+  const [draftStart, setDraftStart] = useState(dateKey(6));
+  const [draftEnd, setDraftEnd] = useState(dateKey(0));
+  const [customDates, setCustomDates] = useState({ start: "", end: "" });
   const [page, setPage] = useState(1);
   const [authRevision, setAuthRevision] = useState(0);
-  const [usage, setUsage] = useState<CustomModelUsagePage | null>(null);
+  const [usage, setUsage] = useState<CustomModelUsagePage | null>(() => readPageCache<CustomModelUsagePage>(`usage:v2:${dateKey(0)}:today::::1`) ?? null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,16 +61,20 @@ export function CustomModelUsageTab({ reload }: { reload: number }) {
     const token = readClientToken();
     if (!token) { setUsage(null); setError(null); setLoading(false); return; }
     let cancelled = false;
+    const identity = pageCacheIdentity();
+    const cacheKey = `usage:v2:${dateKey(0)}:${range}:${customDates.start}:${customDates.end}:${model}:${page}`;
+    const cached = readPageCache<CustomModelUsagePage>(cacheKey);
     setLoading(true);
     setError(null);
-    setUsage(null);
-    const startDate = range === "today" ? dateKey(0) : range === "7d" ? dateKey(6) : range === "30d" ? dateKey(29) : undefined;
-    void fetchCustomModelUsage({ page, pageSize: PAGE_SIZE, model, startDate, endDate: startDate ? dateKey(0) : undefined })
-      .then((result) => { if (!cancelled && token === readClientToken()) setUsage(result); })
+    setUsage(cached ?? null);
+    const startDate = range === "today" ? dateKey(0) : range === "7d" ? dateKey(6) : range === "30d" ? dateKey(29) : range === "custom" ? customDates.start : undefined;
+    const endDate = range === "custom" ? customDates.end : startDate ? dateKey(0) : undefined;
+    void fetchCustomModelUsage({ page, pageSize: PAGE_SIZE, model, startDate, endDate })
+      .then((result) => { if (!cancelled && token === readClientToken() && identity === pageCacheIdentity()) { setUsage(result); writePageCache(cacheKey, result, identity); } })
       .catch((cause) => { if (!cancelled && token === readClientToken()) setError(cause instanceof Error ? cause.message : String(cause)); })
       .finally(() => { if (!cancelled && token === readClientToken()) setLoading(false); });
     return () => { cancelled = true; };
-  }, [range, model, page, reload, authRevision]);
+  }, [range, customDates, model, page, reload, authRevision]);
 
   const modelTotals = useMemo(() => {
     const grouped = new Map<string, { input: number; output: number; cost: number; priced: boolean }>();
@@ -88,7 +95,7 @@ export function CustomModelUsageTab({ reload }: { reload: number }) {
   const pageCount = usage ? Math.max(1, Math.ceil(usage.total / usage.pageSize)) : 1;
 
   return <div className="min-w-0 space-y-6">
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-3">
       <div className="inline-flex rounded-lg border bg-muted/40 p-1" role="group" aria-label="统计时间范围">
         {ranges.map((option) => <button key={option.value} type="button" onClick={() => { setRange(option.value); setPage(1); }} className={cn("rounded-md px-3 py-1.5 text-xs font-medium", range === option.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{option.label}</button>)}
       </div>
@@ -98,15 +105,21 @@ export function CustomModelUsageTab({ reload }: { reload: number }) {
       </form>
     </div>
 
+    <form className="flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); if (!draftStart || !draftEnd || draftStart > draftEnd) { setError("请选择有效的日期范围，开始日期不能晚于结束日期。"); return; } setCustomDates({ start: draftStart, end: draftEnd }); setRange("custom"); setPage(1); }}>
+      <label className="space-y-1 text-xs text-muted-foreground"><span className="block">开始日期</span><Input type="date" required value={draftStart} max={draftEnd || undefined} onChange={(event) => setDraftStart(event.target.value)} className="h-9 w-40" /></label>
+      <label className="space-y-1 text-xs text-muted-foreground"><span className="block">结束日期</span><Input type="date" required value={draftEnd} min={draftStart || undefined} onChange={(event) => setDraftEnd(event.target.value)} className="h-9 w-40" /></label>
+      <Button type="submit" variant="outline" size="sm" className="h-9"><Search />查询日期</Button>
+    </form>
+
     {error && <Alert variant="destructive"><CircleAlert /><AlertTitle>读取模型用量失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {[
-        ["调用次数", summary ? tokens.format(summary.requests) : "—"],
-        ["输入 Token", summary ? tokens.format(summary.inputTokens) : "—"],
-        ["输出 Token", summary ? tokens.format(summary.outputTokens) : "—"],
+        ["调用次数", summary?.requests != null ? tokens.format(summary.requests) : "—"],
+        ["输入 Token", summary?.inputTokens != null ? tokens.format(summary.inputTokens) : "—"],
+        ["输出 Token", summary?.outputTokens != null ? tokens.format(summary.outputTokens) : "—"],
         ["费用（人民币）", summary ? money(summary.costCny) : "—"],
-      ].map(([label, value]) => <Card key={label} className="gap-0 rounded-lg py-4 shadow-none"><CardContent className="px-4"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-2 truncate text-xl font-semibold tabular-nums" title={value}>{loading ? "加载中…" : value}</div></CardContent></Card>)}
+      ].map(([label, value]) => <Card key={label} className="gap-0 rounded-lg py-4 shadow-none"><CardContent className="px-4"><div className="text-xs text-muted-foreground">{label}</div><div className="mt-2 truncate text-xl font-semibold tabular-nums" title={value}>{loading && !usage ? "加载中…" : value}</div></CardContent></Card>)}
     </div>
 
     {modelTotals.length > 0 && <section className="min-w-0 space-y-2"><h2 className="text-sm font-semibold">本页模型汇总</h2><div className="overflow-x-auto rounded-lg border"><Table className="min-w-[560px]"><TableHeader><TableRow><TableHead>模型</TableHead><TableHead className="text-right">输入 Token</TableHead><TableHead className="text-right">输出 Token</TableHead><TableHead className="text-right">费用（人民币）</TableHead></TableRow></TableHeader><TableBody>{modelTotals.map(([name, value]) => <TableRow key={name}><TableCell className="max-w-[240px] truncate font-medium" title={name}>{name}</TableCell><TableCell className="text-right tabular-nums">{tokens.format(value.input)}</TableCell><TableCell className="text-right tabular-nums">{tokens.format(value.output)}</TableCell><TableCell className="text-right tabular-nums">{money(value.priced ? value.cost : null)}</TableCell></TableRow>)}</TableBody></Table></div></section>}

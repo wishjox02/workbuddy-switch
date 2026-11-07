@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BrowserRouter, HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ArrowUp, BarChart3, Boxes, Gift, Headphones, LogIn, LogOut, Megaphone, RefreshCw, Settings2, ShoppingBag, Sparkles, UserRound, Wallet, X } from "lucide-react";
@@ -45,12 +45,23 @@ function creditValue(credit: CreditExpiry | undefined): number | null {
   return (credit.resources ?? []).reduce((sum, resource) => sum + (resource.remaining || 0), 0);
 }
 
+function announcementLink(value: unknown): string {
+  try {
+    const url = new URL(String(value || ""));
+    return (url.protocol === "https:" || url.protocol === "http:") && !url.username && !url.password ? url.href : "";
+  } catch { return ""; }
+}
+
 function TotalCreditBar() {
   const accounts = useAccountsStore((state) => state.accounts);
   const creditMap = useAccountsStore((state) => state.creditMap);
   const ensureCredits = useAccountsStore((state) => state.ensureCredits);
   const fetchAll = useAccountsStore((state) => state.fetchAll);
   const [announcement, setAnnouncement] = useState("");
+  const [announcementUrl, setAnnouncementUrl] = useState("");
+  const announcementRef = useRef<HTMLDivElement>(null);
+  const [announcementWidth, setAnnouncementWidth] = useState(0);
+  const [announcementDuration, setAnnouncementDuration] = useState(60);
   const { balance, loading: balanceLoading } = useModelBalance();
   const navigate = useNavigate();
 
@@ -72,6 +83,7 @@ function TotalCreditBar() {
         const payload = await response.json().catch(() => null);
         if (cancelled || !response.ok || !payload || payload.ok === false) return;
         setAnnouncement(String(payload.data?.announcement || "").trim());
+        setAnnouncementUrl(announcementLink(payload.data?.linkUrl));
       } catch {
         // 公告不可用不影响账号和模型功能。
       }
@@ -83,6 +95,28 @@ function TotalCreditBar() {
       window.clearInterval(timer);
     };
   }, []);
+
+  useEffect(() => {
+    const node = announcementRef.current;
+    if (!node || !announcement) {
+      setAnnouncementWidth(0);
+      return;
+    }
+    const measure = () => {
+      const text = node.querySelector<HTMLElement>("[data-announcement-text]");
+      const width = text?.offsetWidth ?? 0;
+      setAnnouncementWidth(node.clientWidth);
+      setAnnouncementDuration(Math.max(20, (Math.max(width, node.clientWidth) + 64) / 20));
+    };
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [announcement]);
 
   const total = useMemo(() => {
     let amount = 0;
@@ -105,29 +139,23 @@ function TotalCreditBar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-card/95 px-3 py-3 backdrop-blur sm:px-8">
-      <div className="mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="hidden size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary sm:flex">
-            <Sparkles className="size-4" aria-hidden="true" />
-          </span>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5 whitespace-nowrap sm:gap-2">
-              <span className="text-xs font-medium text-foreground sm:text-sm">积分</span>
-              <strong className="truncate text-base font-semibold tabular-nums text-foreground sm:text-xl">{totalLabel}</strong>
-              <span className="hidden text-xs text-muted-foreground sm:inline">{accounts.length} 个账号</span>
-              {total.loaded > 0 && total.loaded < accounts.length && <span className="hidden text-xs text-muted-foreground sm:inline">部分账号未同步</span>}
-            </div>
-            {announcement && (
-              <div className="mt-2 flex max-w-[min(64vw,680px)] items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-2.5 py-1.5 text-xs text-foreground" role="status" title={announcement}>
-                <Megaphone className="mt-0.5 size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                <span className="line-clamp-2 break-words">{announcement}</span>
+      <div className="mx-auto w-full max-w-[1180px]">
+        {announcement && (
+          <div className="mb-2 flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-950/40 dark:text-emerald-100" role="status" title={announcement}>
+            <Megaphone className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            <div ref={announcementRef} className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+              <div className="wb-announcement-track inline-flex min-w-max items-center gap-16" style={{ animationDuration: `${announcementDuration}s` }}>
+                <span data-announcement-text style={{ minWidth: announcementWidth }}>{announcement}</span>
+                <span aria-hidden="true" style={{ minWidth: announcementWidth }}>{announcement}</span>
               </div>
-            )}
+            </div>
+            {announcementUrl && <a href={announcementUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-semibold text-emerald-800 underline underline-offset-4 hover:text-emerald-600 dark:text-emerald-200">查看详情</a>}
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button type="button" onClick={() => navigate("/models")} className="rounded-lg border border-border bg-background px-3 py-2 text-left text-xs text-foreground" title="查看模型服务余额">
-            <span className="font-semibold">余额 {balanceLoading ? "加载中…" : balance === null ? "—" : `¥${balance.toFixed(2)}`}</span>
+        )}
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" onClick={() => navigate("/models")} className="min-w-40 rounded-lg border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted/40" title="查看余额与积分">
+            <span className="flex items-center justify-between gap-4"><span className="text-muted-foreground">余额</span><strong className="font-semibold tabular-nums">{balanceLoading ? "加载中…" : balance === null ? "—" : `¥${balance.toFixed(2)}`}</strong></span>
+            <span className="mt-0.5 flex items-center justify-between gap-4 border-t border-border/60 pt-0.5"><span className="text-muted-foreground">积分</span><strong className="font-semibold tabular-nums">{totalLabel}</strong></span>
           </button>
           <Button type="button" className="rounded-xl bg-primary px-3.5 text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90" onClick={() => navigate("/recharge")}>
             <Wallet />充值
@@ -194,9 +222,8 @@ function PersonalCenter() {
   useEffect(() => {
     const refresh = () => { void refreshClientUser().catch(() => undefined); };
     refresh();
-    window.addEventListener("focus", refresh);
     const timer = window.setInterval(refresh, 30_000);
-    return () => { window.removeEventListener("focus", refresh); window.clearInterval(timer); };
+    return () => { window.clearInterval(timer); };
   }, []);
 
   async function logout() {
@@ -209,16 +236,16 @@ function PersonalCenter() {
 
   return (
     <>
-      <section className="personal-center mb-3 rounded-xl border border-sidebar-border bg-sidebar-accent/45 p-2.5">
+      <section className="personal-center mt-2 mb-1 rounded-xl border border-sidebar-border bg-sidebar-accent/45 p-3">
         {user ? (
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">{user.phone.slice(-2)}</div>
-            <div className="personal-center-details min-w-0 flex-1">
-              <div className="personal-center-heading truncate text-xs font-semibold">个人中心</div>
-              <div className="personal-center-phone truncate text-[11px] text-sidebar-foreground/60">{user.phone}</div>
-              <div className="personal-center-id break-all text-[11px] text-sidebar-foreground/60">用户ID: {user.sub2apiAccountId || "未同步"}</div>
+          <div className="flex items-start gap-2.5">
+            <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">{user.phone.slice(-2)}</div>
+            <div className="personal-center-details min-w-0 flex-1 space-y-0.5">
+              <div className="personal-center-heading text-xs font-semibold leading-5">个人中心</div>
+              <div className="personal-center-phone min-w-0 break-all text-[11px] leading-4 text-sidebar-foreground/65" title={user.phone}><span className="mr-1 text-sidebar-foreground/45">手机号</span>{user.phone}</div>
+              <div className="personal-center-id min-w-0 break-all font-mono text-[10px] leading-4 text-sidebar-foreground/55" title={user.sub2apiAccountId || "未同步"}><span className="mr-1 font-sans text-sidebar-foreground/45">用户 ID</span>{user.sub2apiAccountId || "未同步"}</div>
             </div>
-            <Button type="button" variant="ghost" size="icon" className="size-7 rounded-lg text-sidebar-foreground/65 hover:text-sidebar-foreground" onClick={() => void logout()} disabled={busy} aria-label="退出登录" title="退出登录"><LogOut className="size-3.5" /></Button>
+            <Button type="button" variant="ghost" size="icon" className="mt-0.5 size-7 shrink-0 rounded-lg text-sidebar-foreground/65 hover:text-sidebar-foreground" onClick={() => void logout()} disabled={busy} aria-label="退出登录" title="退出登录"><LogOut className="size-3.5" /></Button>
           </div>
         ) : (
           <button type="button" className="flex w-full items-center gap-2.5 rounded-lg px-1 py-1 text-left text-sidebar-foreground/75 hover:text-sidebar-foreground" onClick={() => setLoginOpen(true)}>
@@ -236,6 +263,7 @@ function ClientAuthGate({ children }: { children: ReactNode }) {
   const [authenticated, setAuthenticated] = useState(() => Boolean(readClientToken()));
   const [loginOpen, setLoginOpen] = useState(false);
   const [announcement, setAnnouncement] = useState("");
+  const [announcementUrl, setAnnouncementUrl] = useState("");
 
   useEffect(() => {
     const sync = () => setAuthenticated(Boolean(readClientToken()));
@@ -250,7 +278,7 @@ function ClientAuthGate({ children }: { children: ReactNode }) {
       try {
         const response = await fetch(adminApiUrl("/client/announcement"), { cache: "no-store" });
         const payload = await response.json().catch(() => null);
-        if (!cancelled && response.ok && payload?.ok !== false) setAnnouncement(String(payload?.data?.announcement || "").trim());
+        if (!cancelled && response.ok && payload?.ok !== false) { setAnnouncement(String(payload?.data?.announcement || "").trim()); setAnnouncementUrl(announcementLink(payload?.data?.linkUrl)); }
       } catch { /* 公告不可用不阻断登录 */ }
     };
     void load();
@@ -264,10 +292,10 @@ function ClientAuthGate({ children }: { children: ReactNode }) {
       <div className="w-full max-w-sm space-y-5 text-center">
         <AppIconMark size={64} className="mx-auto" />
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">登录小玉米</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">登录小玉米API</h1>
           <p className="mt-2 text-sm text-muted-foreground">登录后才能访问账号、模型、余额和统计功能。</p>
         </div>
-        {announcement && <p className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-left text-sm text-foreground"><Megaphone className="mt-0.5 size-4 shrink-0 text-primary" /><span>{announcement}</span></p>}
+        {announcement && <p className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-left text-sm text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-950/40 dark:text-emerald-100"><Megaphone className="mt-0.5 size-4 shrink-0 text-emerald-700 dark:text-emerald-300" /><span className="min-w-0 flex-1 break-words">{announcement}</span>{announcementUrl && <a href={announcementUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 font-semibold underline underline-offset-4">查看详情</a>}</p>}
         <Button type="button" size="lg" className="w-full" onClick={() => setLoginOpen(true)}>
           <LogIn />登录个人中心
         </Button>
@@ -277,11 +305,17 @@ function ClientAuthGate({ children }: { children: ReactNode }) {
   );
 }
 
+/** Start the desktop update check before the auth gate mounts the main layout. */
+function UpdateBootstrap() {
+  useUpdateState();
+  return null;
+}
+
 function ModelUsagePage() {
   const [reload, setReload] = useState(0);
   return <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
     <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-[28px] font-semibold">模型使用记录</h1><p className="mt-2 text-sm text-muted-foreground">查看小玉米模型的 Token 用量与消费明细。</p></div>
+      <div><h1 className="text-[28px] font-semibold">模型统</h1><p className="mt-2 text-sm text-muted-foreground">查看模型服务的请求消息、Token 用量与消费明细。</p></div>
       <Button variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}><RefreshCw />刷新记录</Button>
     </header>
     <CustomModelUsageTab reload={reload} />
@@ -355,12 +389,12 @@ function Layout() {
       { to: "/credit-stats", label: "积分统计", icon: Sparkles },
       { to: "/token-stats", label: "Token 统计", icon: BarChart3 },
     ] },
-    { title: "小玉米模型服务", items: [
-      { to: "/models", label: "模型与启用", icon: Boxes },
+    { title: "API服务", items: [
+      { to: "/models", label: "我的模型", icon: Boxes },
+      { to: "/model-usage", label: "模型统", icon: BarChart3 },
       { to: "/model-market", label: "模型广场", icon: ShoppingBag },
       { to: "/recharge", label: "余额与充值", icon: Wallet },
-      { to: "/redeem", label: "CDKY兑换", icon: Gift },
-      { to: "/model-usage", label: "使用记录", icon: BarChart3 },
+      { to: "/redeem", label: "兑换", icon: Gift },
     ] },
     { title: "", items: [{ to: "/settings", label: "设置", icon: Settings2 }, { to: "/customer-service", label: "客服", icon: Headphones }] },
   ];
@@ -369,24 +403,24 @@ function Layout() {
     <div className="wb-app-shell flex h-screen min-h-0 overflow-hidden bg-background">
       {hasUnifiedTitleBar ? <div data-tauri-drag-region className="fixed inset-x-0 top-0 z-50 h-8" aria-hidden="true" /> : null}
       <aside className={cn("flex min-h-0 w-[248px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 pb-4 text-sidebar-foreground", hasUnifiedTitleBar ? "pt-20" : "pt-5")}>
-        <div className="mb-8 flex items-center gap-3 px-2">
-          <AppIconMark size={38} className="drop-shadow-sm" />
+        <div className="mb-6 flex items-center gap-2 px-1">
+          <AppIconMark size={54} className="drop-shadow-sm" />
           <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold tracking-tight">小玉米</div>
+            <div className="truncate text-base font-semibold">小玉米API</div>
             <div className="mt-0.5 text-[11px] text-sidebar-foreground/55">账号与模型工作台</div>
             {demoModeEnabled && <Badge variant="secondary" className="mt-1 h-5 border-0 px-1.5 text-[10px]">演示模式</Badge>}
           </div>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto" aria-label="主导航">
-          {navGroups.map((group) => <div key={group.title || "settings"} className="mb-2">{group.title && <div className="mb-1 px-3 pt-1 text-[11px] font-semibold text-sidebar-foreground/50">{group.title}</div>}
+          {navGroups.map((group) => <div key={group.title || "settings"} className="mb-3">{group.title && <div className="mb-1.5 flex items-center gap-2 px-3 pt-2 text-[11px] font-medium text-sidebar-foreground/55"><span>{group.title}</span><span className="h-px flex-1 bg-sidebar-border/70" /></div>}
           {group.items.map(({ to, label, icon: Icon, ...options }) => (
             <NavLink
               key={to}
               to={to}
               end={"end" in options && options.end === true}
               className={({ isActive }) => cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring/50",
-                isActive ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                "flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-sidebar-ring/50",
+                isActive ? "bg-sidebar-primary/12 font-medium text-sidebar-foreground" : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground",
               )}
             >
               <Icon className="size-4" />
@@ -409,6 +443,7 @@ export default function App() {
   const Router = pagesDemoHostingEnabled ? HashRouter : BrowserRouter;
   return (
     <TooltipProvider delayDuration={250}>
+      <UpdateBootstrap />
       <Router>
         <Routes>
           <Route element={<ClientAuthGate><Layout /></ClientAuthGate>}>
