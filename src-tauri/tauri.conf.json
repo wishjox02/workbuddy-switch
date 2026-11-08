@@ -45,6 +45,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows-installer-hooks.nsh"
+      }
+    },
     "externalBin": [
       "binaries/agent-studio-runtime"
     ]

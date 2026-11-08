@@ -726,16 +726,15 @@ pub fn install_manual_package<R: Runtime>(
     std::fs::write(&path, bytes).map_err(|e| format!("保存更新包失败：{e}"))?;
     #[cfg(target_os = "windows")]
     {
-        let installed_exe = std::env::var_os("LOCALAPPDATA")
-            .map(std::path::PathBuf::from)
+        let current_exe = std::env::current_exe().map_err(|e| format!("无法定位当前程序：{e}"))?;
+        let installed_exe = current_exe
+            .parent()
             .ok_or("无法定位安装目录")?
-            .join("小玉米API")
             .join("小玉米API.exe");
         let helper = std::env::temp_dir().join(format!(
             "workbuddy-update-launcher-{}.exe",
             std::process::id()
         ));
-        let current_exe = std::env::current_exe().map_err(|e| format!("无法定位当前程序：{e}"))?;
         std::fs::copy(&current_exe, &helper)
             .map_err(|e| format!("创建更新启动助手失败：{e}"))?;
         std::process::Command::new(&helper)
