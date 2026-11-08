@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, CircleAlert, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleAlert, RefreshCw, Search } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,7 @@ function money(value: number | null | undefined): string {
   return value == null ? "—" : yuan.format(value);
 }
 
-export function CustomModelUsageTab({ reload }: { reload: number }) {
+export function CustomModelUsageTab({ reload, onRefresh }: { reload: number; onRefresh: () => void }) {
   const [range, setRange] = useState<Range>("today");
   const [draftModel, setDraftModel] = useState("");
   const [model, setModel] = useState("");
@@ -95,7 +95,7 @@ export function CustomModelUsageTab({ reload }: { reload: number }) {
   const pageCount = usage ? Math.max(1, Math.ceil(usage.total / usage.pageSize)) : 1;
 
   return <div className="min-w-0 space-y-6">
-    <div className="flex flex-wrap items-center justify-end gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="inline-flex rounded-lg border bg-muted/40 p-1" role="group" aria-label="统计时间范围">
         {ranges.map((option) => <button key={option.value} type="button" onClick={() => { setRange(option.value); setPage(1); }} className={cn("rounded-md px-3 py-1.5 text-xs font-medium", range === option.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>{option.label}</button>)}
       </div>
@@ -109,6 +109,7 @@ export function CustomModelUsageTab({ reload }: { reload: number }) {
       <label className="space-y-1 text-xs text-muted-foreground"><span className="block">开始日期</span><Input type="date" required value={draftStart} max={draftEnd || undefined} onChange={(event) => setDraftStart(event.target.value)} className="h-9 w-40" /></label>
       <label className="space-y-1 text-xs text-muted-foreground"><span className="block">结束日期</span><Input type="date" required value={draftEnd} min={draftStart || undefined} onChange={(event) => setDraftEnd(event.target.value)} className="h-9 w-40" /></label>
       <Button type="submit" variant="outline" size="sm" className="h-9"><Search />查询日期</Button>
+      <Button type="button" variant="outline" size="sm" className="h-9" onClick={onRefresh} disabled={loading}><RefreshCw className={cn(loading && "animate-spin")} />刷新记录</Button>
     </form>
 
     {error && <Alert variant="destructive"><CircleAlert /><AlertTitle>读取模型用量失败</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}

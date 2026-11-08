@@ -293,15 +293,6 @@ export default function RechargePage() {
   const pendingCount = orders.filter((order) => order.status === "Pending").length;
 
   return <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
-    <header className="mb-7 flex min-w-0 flex-wrap items-start justify-between gap-4">
-      <div className="min-w-0">
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary"><Wallet className="size-4" />余额充值</div>
-        <h1 className="text-[28px] font-semibold tracking-tight">充值</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">充值后用于小玉米模型调用，按实际用量扣费。此余额与 WorkBuddy 积分相互独立。</p>
-      </div>
-      <Button type="button" variant="outline" size="sm" onClick={() => void loadOrders()} disabled={ordersLoading}><RefreshCw className={cn(ordersLoading && "animate-spin")} />刷新订单</Button>
-    </header>
-
     {configError && <div className="mb-6 flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"><CircleAlert className="size-4 shrink-0" />{configError}</div>}
     {config && !config.enabled && <div className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"><CircleAlert className="size-4 shrink-0" />充值暂未开放，请稍后再试。</div>}
 
@@ -353,6 +344,7 @@ export default function RechargePage() {
               <CardTitle className="text-base">充值订单</CardTitle>
               <CardDescription className="mt-1 text-xs">累计充值 ¥{paidTotal.toFixed(2)} · 待支付 {pendingCount} 笔</CardDescription>
             </div>
+            <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => void loadOrders()} disabled={ordersLoading}><RefreshCw className={cn(ordersLoading && "animate-spin")} />刷新订单</Button>
           </div>
         </CardHeader>
         <CardContent className="p-0">

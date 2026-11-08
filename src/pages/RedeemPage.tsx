@@ -66,11 +66,6 @@ export default function RedeemPage() {
   }
 
   return <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
-    <header className="mb-7">
-      <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-primary"><Gift className="size-4" />兑换中心</div>
-      <h1 className="text-[28px] font-semibold">兑换</h1>
-      <p className="mt-2 text-sm text-muted-foreground">使用兑换码为当前账号增加积分。</p>
-    </header>
     {!loggedIn ? <div role="status" className="flex max-w-lg items-start gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"><CircleAlert className="mt-0.5 size-4 shrink-0" /><span>请先登录个人中心，再使用兑换功能。</span></div> : !adminBackendUrl() ? <div role="alert" className="flex max-w-lg items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"><CircleAlert className="mt-0.5 size-4 shrink-0" /><span>尚未配置后台服务，暂时无法兑换。</span></div> : <Card className="max-w-lg rounded-lg shadow-none">
       <CardHeader><CardTitle className="text-base">输入兑换码</CardTitle><CardDescription>每个兑换码只能使用一次，兑换后积分立即到账。</CardDescription></CardHeader>
       <CardContent className="space-y-4"><div className="flex gap-2"><Input value={code} onChange={(event) => setCode(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void handleRedeem(); }} placeholder="请输入兑换码" autoComplete="off" disabled={redeeming} aria-label="兑换码" /><Button type="button" onClick={() => void handleRedeem()} disabled={redeeming || !code.trim()}>{redeeming ? <Loader2 className="animate-spin" /> : <Gift />}兑换</Button></div>

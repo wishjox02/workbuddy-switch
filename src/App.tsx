@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BrowserRouter, HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { ArrowUp, BarChart3, Boxes, Gift, Headphones, LogIn, LogOut, Megaphone, RefreshCw, Settings2, ShoppingBag, Sparkles, UserRound, Wallet, X } from "lucide-react";
+import { ArrowUp, BarChart3, Boxes, Gift, Headphones, LogIn, LogOut, Megaphone, Settings2, ShoppingBag, Sparkles, UserRound, Wallet, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -53,6 +53,20 @@ function announcementLink(value: unknown): string {
 }
 
 function TotalCreditBar() {
+  const location = useLocation();
+  const pageHeadings: Record<string, [string, string?]> = {
+    "/": ["账号管理", "管理 WorkBuddy 账号、积分与签到状态"],
+    "/credit-stats": ["积分统计", "查看账号积分和用量"],
+    "/token-stats": ["Token 统计", "查看 Token 用量"],
+    "/models": ["我的模型"],
+    "/model-usage": ["模型统计", "查看模型调用和消费明细"],
+    "/model-market": ["模型广场"],
+    "/recharge": ["充值", "模型余额与 WorkBuddy 积分相互独立"],
+    "/redeem": ["兑换", "使用兑换码为当前账号增加积分"],
+    "/settings": ["设置"],
+    "/customer-service": ["客服支持"],
+  };
+  const [pageTitle, pageDescription] = pageHeadings[location.pathname] ?? [""];
   const accounts = useAccountsStore((state) => state.accounts);
   const creditMap = useAccountsStore((state) => state.creditMap);
   const ensureCredits = useAccountsStore((state) => state.ensureCredits);
@@ -142,7 +156,7 @@ function TotalCreditBar() {
       <div className="mx-auto w-full max-w-[1180px]">
         {announcement && (
           <div className="mb-2 flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 dark:border-emerald-400/30 dark:bg-emerald-950/40 dark:text-emerald-100" role="status" title={announcement}>
-            <Megaphone className="size-4 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
+            <Megaphone className="size-4 shrink-0 text-emerald-500 dark:text-emerald-300" aria-hidden="true" />
             <div ref={announcementRef} className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
               <div className="wb-announcement-track inline-flex min-w-max items-center gap-16" style={{ animationDuration: `${announcementDuration}s` }}>
                 <span data-announcement-text style={{ minWidth: announcementWidth }}>{announcement}</span>
@@ -152,7 +166,12 @@ function TotalCreditBar() {
             {announcementUrl && <a href={announcementUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-semibold text-emerald-800 underline underline-offset-4 hover:text-emerald-600 dark:text-emerald-200">查看详情</a>}
           </div>
         )}
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex min-w-0 items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-base font-semibold text-foreground" title={pageTitle}>{pageTitle}</h1>
+            {pageDescription && <p className="mt-0.5 truncate text-xs text-muted-foreground" title={pageDescription}>{pageDescription}</p>}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
           <button type="button" onClick={() => navigate("/models")} className="min-w-40 rounded-lg border border-border bg-background px-3 py-1.5 text-left text-xs text-foreground transition-colors hover:bg-muted/40" title="查看余额与积分">
             <span className="flex items-center justify-between gap-4"><span className="text-muted-foreground">余额</span><strong className="font-semibold tabular-nums">{balanceLoading ? "加载中…" : balance === null ? "—" : `¥${balance.toFixed(2)}`}</strong></span>
             <span className="mt-0.5 flex items-center justify-between gap-4 border-t border-border/60 pt-0.5"><span className="text-muted-foreground">积分</span><strong className="font-semibold tabular-nums">{totalLabel}</strong></span>
@@ -160,6 +179,7 @@ function TotalCreditBar() {
           <Button type="button" className="rounded-xl bg-primary px-3.5 text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90" onClick={() => navigate("/recharge")}>
             <Wallet />充值
           </Button>
+          </div>
         </div>
       </div>
     </header>
@@ -314,11 +334,7 @@ function UpdateBootstrap() {
 function ModelUsagePage() {
   const [reload, setReload] = useState(0);
   return <div className="wb-page mx-auto w-full max-w-[1180px] min-w-0 px-4 py-7 sm:px-8 sm:py-10">
-    <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-[28px] font-semibold">模型统</h1><p className="mt-2 text-sm text-muted-foreground">查看模型服务的请求消息、Token 用量与消费明细。</p></div>
-      <Button variant="outline" size="sm" onClick={() => setReload((value) => value + 1)}><RefreshCw />刷新记录</Button>
-    </header>
-    <CustomModelUsageTab reload={reload} />
+    <CustomModelUsageTab reload={reload} onRefresh={() => setReload((value) => value + 1)} />
   </div>;
 }
 
@@ -391,9 +407,9 @@ function Layout() {
     ] },
     { title: "API服务", items: [
       { to: "/models", label: "我的模型", icon: Boxes },
-      { to: "/model-usage", label: "模型统", icon: BarChart3 },
+      { to: "/model-usage", label: "模型统计", icon: BarChart3 },
       { to: "/model-market", label: "模型广场", icon: ShoppingBag },
-      { to: "/recharge", label: "余额与充值", icon: Wallet },
+      { to: "/recharge", label: "充值", icon: Wallet },
       { to: "/redeem", label: "兑换", icon: Gift },
     ] },
     { title: "", items: [{ to: "/settings", label: "设置", icon: Settings2 }, { to: "/customer-service", label: "客服", icon: Headphones }] },

@@ -187,11 +187,15 @@
   }
 
   .wb-announcement-track {
-    animation: wb-announcement-marquee 60s linear infinite;
+    animation-name: wb-announcement-marquee;
+    animation-duration: 60s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    animation-play-state: running;
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .wb-announcement-track { animation: none; }
+    .wb-announcement-track { animation-name: none; }
   }
 
   .wb-page {
@@ -199,9 +203,12 @@
   }
 
   .wb-page > header h1 {
-    color: var(--foreground);
-    letter-spacing: -0.02em;
+    display: none;
   }
+
+  .wb-page > header h1 + p { display: none; }
+  .wb-page > header { margin-bottom: 1rem; }
+  .wb-page > header:has(> h1) { display: none; }
 
   .wb-page .rounded-2xl.border {
     border-color: color-mix(in oklab, var(--border) 88%, var(--primary));
