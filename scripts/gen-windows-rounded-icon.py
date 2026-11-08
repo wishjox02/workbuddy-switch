@@ -62,6 +62,9 @@ def main() -> None:
         format="ICO",
         sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
     )
+    rounded_src.resize((32, 32), Image.Resampling.LANCZOS).save(ROOT / "32x32.png", "PNG")
+    rounded_src.resize((128, 128), Image.Resampling.LANCZOS).save(ROOT / "128x128.png", "PNG")
+    rounded_src.resize((256, 256), Image.Resampling.LANCZOS).save(ROOT / "128x128@2x.png", "PNG")
     for name, size in WINDOWS_PNGS.items():
         rounded_src.resize((size, size), Image.Resampling.LANCZOS).save(ROOT / name, "PNG")
 
