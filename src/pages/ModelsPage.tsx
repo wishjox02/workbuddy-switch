@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Boxes, Bot, Box, ChevronDown, Copy, Cpu, Eye, EyeOff, Gauge, KeyRound, Loader2, Plus, PowerOff, RefreshCw, RotateCw, Search, Sparkles, Trash2, X } from "lucide-react";
+import { Boxes, Bot, Box, ChevronDown, Copy, Cpu, Eye, EyeOff, Gauge, KeyRound, Loader2, Maximize2, Minimize2, Plus, PowerOff, RefreshCw, RotateCw, Search, Sparkles, Trash2, X } from "lucide-react";
 import { siClaude, siDeepseek, siGooglegemini, siKimi, siMeta, siMistralai, siQwen, siBytedance } from "simple-icons";
 import { toast } from "sonner";
 
@@ -387,7 +387,7 @@ export default function ModelsPage() {
     {target === "dsh" && (loggedIn || importedDsh.some((model) => model.managed)) && <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2" role="status"><p className="text-xs leading-5 text-foreground">模型开关会先更新 Harness 配置；正在运行的 Agent 需要重新读取配置才能生效。</p><Button type="button" variant="outline" size="sm" onClick={() => void restartHarness()} disabled={restartingHarness || demoModeEnabled || !isDesktop()}>{restartingHarness ? <Loader2 className="animate-spin" /> : <RotateCw />}重启 Harness</Button></div>}
     <Card id="model-list" className="min-w-0 gap-0 overflow-hidden rounded-lg py-0 shadow-none">
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3 sm:px-5">
-        <div className="flex shrink-0 items-baseline gap-2"><h2 className="text-sm font-semibold">模型列表</h2><span className="text-xs tabular-nums text-muted-foreground">{normalizedQuery ? `${filteredModels.length} / ${allModels.length}` : allModels.length} 个</span></div>
+        <div className="flex shrink-0 items-center gap-2"><h2 className="text-sm font-semibold">模型列表</h2><span className="text-xs tabular-nums text-muted-foreground">{normalizedQuery ? `${filteredModels.length} / ${allModels.length}` : allModels.length} 个</span><div className="ml-1 flex items-center gap-0.5"><Button type="button" variant="ghost" size="icon" className="size-7" title="全部展开" aria-label="全部展开" onClick={() => setCollapsed((current) => Object.fromEntries(allGroups.map(([provider]) => [`${target}:${provider}`, false]).concat(Object.entries(current).filter(([key]) => !key.startsWith(`${target}:`)))))}><Maximize2 className="size-3.5" /></Button><Button type="button" variant="ghost" size="icon" className="size-7" title="全部收起" aria-label="全部收起" onClick={() => setCollapsed((current) => Object.fromEntries(allGroups.map(([provider]) => [`${target}:${provider}`, true]).concat(Object.entries(current).filter(([key]) => !key.startsWith(`${target}:`)))))}><Minimize2 className="size-3.5" /></Button></div></div>
         <div className="relative w-full sm:w-72"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索模型名称、厂商或 ID" className="h-9 rounded-lg pl-9" aria-label="搜索模型" />{query && <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 size-7 -translate-y-1/2 rounded-md" onClick={() => setQuery("")} aria-label="清除搜索"><X className="size-4" /></Button>}</div>
       </div>
       <CardContent className="p-0">{groupedModels.length === 0 ? <div className="px-5 py-14 text-center text-sm text-muted-foreground">{normalizedQuery ? "没有匹配的模型" : "暂无模型"}</div> : groupedModels.map(([provider, models]) => {
@@ -395,7 +395,7 @@ export default function ModelsPage() {
         const external = provider !== "我们的模型";
         const installed = groupModels.filter((model) => !isOurModel(model) && model.localInstalled);
         const groupKey = `${target}:${provider}`;
-        const isCollapsed = collapsed[groupKey] === true;
+        const isCollapsed = collapsed[groupKey] ?? true;
         const displayProvider = serviceDisplayText(provider);
         return <section key={provider} aria-label={`${displayProvider} 模型`}><div className="flex min-w-0 items-center gap-1 border-b border-t border-border/60 bg-muted/25 px-3 py-1.5">
           <button type="button" className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left text-xs font-bold hover:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary" aria-expanded={!isCollapsed} onClick={() => setCollapsed((current) => ({ ...current, [groupKey]: !isCollapsed }))}>
