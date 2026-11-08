@@ -220,6 +220,18 @@ export function isStaleModelConnectionError(error: unknown): boolean {
 }
 
 type ConnectionIdentity = { token: string; userId: number | null; base: string };
+
+async function withDshTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timer: number | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_, reject) => { timer = window.setTimeout(() => reject(new Error("Harness 配置响应超时，请先重启 Harness 后重试")), 8000); }),
+    ]);
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer);
+  }
+}
 let connectionTail: Promise<void> = Promise.resolve();
 let connectionTask: { identity: ConnectionIdentity; controller: AbortController; promise: Promise<WorkBuddyModel[]> } | null = null;
 let preparedIdentity: ConnectionIdentity | null = null;
@@ -436,7 +448,7 @@ export async function removeAllModelsFromDsh(): Promise<{ models: DshModel[]; re
 
 export async function disableModelFromDsh(id: string, providerName?: string): Promise<DshModel[]> {
   if (isDesktop()) {
-    const result = await invoke<{ models?: DshModel[] }>("local_dsh_disable", { id, providerName });
+    const result = await withDshTimeout(invoke<{ models?: DshModel[] }>("local_dsh_disable", { id, providerName }));
     return Array.isArray(result?.models) ? result.models : [];
   }
   if (providerName && providerName !== "wb-switch") throw new Error("第三方模型开关仅在桌面客户端可用");
@@ -449,7 +461,7 @@ export async function disableModelFromDsh(id: string, providerName?: string): Pr
 
 export async function enableModelFromDsh(id: string, providerName?: string): Promise<DshModel[]> {
   if (isDesktop()) {
-    const result = await invoke<{ models?: DshModel[] }>("local_dsh_enable", { id, providerName });
+    const result = await withDshTimeout(invoke<{ models?: DshModel[] }>("local_dsh_enable", { id, providerName }));
     return Array.isArray(result?.models) ? result.models : [];
   }
   if (providerName && providerName !== "wb-switch") throw new Error("第三方模型开关仅在桌面客户端可用");
