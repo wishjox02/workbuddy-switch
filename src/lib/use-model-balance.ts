@@ -41,9 +41,12 @@ export function useModelBalance() {
       if (readClientToken() !== currentToken) void load();
     };
     void load();
+    // Keep the header balance aligned with the same low-frequency background
+    // cadence used by the update checker.
+    const timer = window.setInterval(() => void load(), 30_000);
     window.addEventListener(authChangedEvent(), onAuthChanged);
     window.addEventListener(MODEL_BALANCE_CHANGED, load);
-    return () => { disposed = true; window.removeEventListener(authChangedEvent(), onAuthChanged); window.removeEventListener(MODEL_BALANCE_CHANGED, load); };
+    return () => { disposed = true; window.clearInterval(timer); window.removeEventListener(authChangedEvent(), onAuthChanged); window.removeEventListener(MODEL_BALANCE_CHANGED, load); };
   }, []);
   return { balance, loading };
 }
