@@ -69,8 +69,10 @@ function start() {
   });
   if (api.isDesktop()) {
     periodicCheck = setInterval(() => {
-      void api.checkUpdate(undefined, true).catch(() => {});
-    }, 30 * 60 * 1000);
+      if (snapshot.phase === "upToDate" || snapshot.phase === "idle" || snapshot.phase === "error") {
+        void api.checkUpdate(undefined, true).catch(() => {});
+      }
+    }, 30 * 1000);
   }
 }
 
