@@ -729,8 +729,8 @@ pub fn install_manual_package<R: Runtime>(
         let installed_exe = std::env::var_os("LOCALAPPDATA")
             .map(std::path::PathBuf::from)
             .ok_or("无法定位安装目录")?
-            .join("小玉米")
-            .join("小玉米.exe");
+            .join("小玉米API")
+            .join("小玉米API.exe");
         let helper = std::env::temp_dir().join(format!(
             "workbuddy-update-launcher-{}.exe",
             std::process::id()

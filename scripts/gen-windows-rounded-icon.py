@@ -44,10 +44,16 @@ def rounded(im: Image.Image, radius_ratio: float = RADIUS_RATIO) -> Image.Image:
 
 def main() -> None:
     src = Image.open(ROOT / "icon.png").convert("RGBA")
-    size = src.width
+    alpha = src.getchannel("A")
+    bbox = alpha.getbbox()
+    if bbox:
+        src = src.crop(bbox)
+    size = max(src.size)
+    square = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    square.alpha_composite(src, ((size - src.width) // 2, (size - src.height) // 2))
     canvas = Image.new("RGBA", (size, size), (255, 255, 255, 255))
-    logo_size = round(size * 0.86)
-    logo = src.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
+    logo_size = round(size * 0.94)
+    logo = square.resize((logo_size, logo_size), Image.Resampling.LANCZOS)
     canvas.alpha_composite(logo, ((size - logo_size) // 2, (size - logo_size) // 2))
     rounded_src = rounded(canvas)
     rounded_src.save(ROOT / "icon-windows.png", "PNG")
