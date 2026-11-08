@@ -1,6 +1,6 @@
 [package]
 name = "wb-switch-admin"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 description = "WorkBuddy 安装统计与版本管理后台"
 
