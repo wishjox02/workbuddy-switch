@@ -1071,9 +1071,7 @@ pub fn restart_deepseek_harness() -> Result<(), String> {
             }
         }
         std::thread::sleep(Duration::from_millis(800));
-        use std::os::windows::process::CommandExt;
         Command::new(&executable)
-            .creation_flags(0x08000000)
             .spawn()
             .map_err(|error| format!("重新启动 DeepSeek Harness 失败：{error}"))?;
         return Ok(());
