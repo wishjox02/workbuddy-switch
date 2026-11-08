@@ -37,6 +37,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "小玉米",
     "createUpdaterArtifacts": true,
     "icon": [
       "icons/icon.ico",
