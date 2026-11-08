@@ -591,8 +591,10 @@ fn set_harness_api_key(api_key: Option<&str>) -> Result<(), String> {
     std::env::set_var("WB_SWITCH_API_KEY", api_key);
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt;
         let status = Command::new("setx")
             .args(["WB_SWITCH_API_KEY", api_key])
+            .creation_flags(0x08000000)
             .status()
             .map_err(|error| format!("写入 Harness API Key 环境变量失败：{error}"))?;
         if !status.success() {
@@ -1021,14 +1023,15 @@ pub fn restart_deepseek_harness() -> Result<(), String> {
             PROCESS_QUERY_LIMITED_INFORMATION,
         };
 
-        let (pid, executable) = unsafe {
+        let (pids, executable) = unsafe {
             let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
             if snapshot == INVALID_HANDLE_VALUE {
                 return Err("无法扫描 DeepSeek Harness 进程".into());
             }
             let mut entry: PROCESSENTRY32W = std::mem::zeroed();
             entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
-            let mut found = None;
+            let mut found = Vec::new();
+            let mut executable = None;
             let mut has_entry = Process32FirstW(snapshot, &mut entry) != 0;
             while has_entry {
                 let name_len = entry
@@ -1043,29 +1046,34 @@ pub fn restart_deepseek_harness() -> Result<(), String> {
                         let mut buffer = [0u16; 32768];
                         let mut length = buffer.len() as u32;
                         if QueryFullProcessImageNameW(process, PROCESS_NAME_WIN32, buffer.as_mut_ptr(), &mut length) != 0 {
-                            found = Some((entry.th32ProcessID, PathBuf::from(String::from_utf16_lossy(&buffer[..length as usize]))));
+                            found.push(entry.th32ProcessID);
+                            if executable.is_none() { executable = Some(PathBuf::from(String::from_utf16_lossy(&buffer[..length as usize]))); }
                         }
                         CloseHandle(process);
-                    }
-                    if found.is_some() {
-                        break;
                     }
                 }
                 has_entry = Process32NextW(snapshot, &mut entry) != 0;
             }
             CloseHandle(snapshot);
-            found.ok_or_else(|| "DeepSeek Harness 未运行".to_string())?
+            if found.is_empty() { return Err("DeepSeek Harness 未运行".into()); }
+            (found, executable.ok_or_else(|| "无法定位 DeepSeek Harness 可执行文件".to_string())?)
         };
 
-        let status = Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/T", "/F"])
-            .status()
-            .map_err(|error| format!("关闭 DeepSeek Harness 失败：{error}"))?;
-        if !status.success() {
-            return Err("关闭 DeepSeek Harness 失败".into());
+        for pid in pids {
+            use std::os::windows::process::CommandExt;
+            let status = Command::new("taskkill")
+                .args(["/PID", &pid.to_string(), "/T", "/F"])
+                .creation_flags(0x08000000)
+                .status()
+                .map_err(|error| format!("关闭 DeepSeek Harness 失败：{error}"))?;
+            if !status.success() {
+                return Err("关闭 DeepSeek Harness 失败".into());
+            }
         }
         std::thread::sleep(Duration::from_millis(800));
+        use std::os::windows::process::CommandExt;
         Command::new(&executable)
+            .creation_flags(0x08000000)
             .spawn()
             .map_err(|error| format!("重新启动 DeepSeek Harness 失败：{error}"))?;
         return Ok(());
