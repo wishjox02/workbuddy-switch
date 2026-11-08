@@ -395,7 +395,7 @@ export async function fetchDshModels(): Promise<DshModel[]> {
 export async function importModelsToDsh(models: WorkBuddyModelInput[]): Promise<DshModel[]> {
   if (isDesktop()) {
     const connection = await fetchModelConnection();
-    const result = await invoke<{ models?: DshModel[] }>("local_dsh_import", { models, baseUrl: connection.baseUrl });
+    const result = await invoke<{ models?: DshModel[] }>("local_dsh_import", { models, baseUrl: connection.baseUrl, apiKey: connection.apiKey });
     return Array.isArray(result?.models) ? result.models : [];
   }
   const result = await dshModelsRequest("/api/client/dsh/models", {

@@ -581,6 +581,27 @@ fn dsh_save(paths: &ModelPaths, root: &YamlValue) -> Result<(), String> {
     write_text(&paths.dsh, &text)
 }
 
+fn set_harness_api_key(api_key: Option<&str>) -> Result<(), String> {
+    let Some(api_key) = api_key.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(());
+    };
+    if !api_key.starts_with("sk-") {
+        return Err("模型服务返回的 API Key 无效".into());
+    }
+    std::env::set_var("WB_SWITCH_API_KEY", api_key);
+    #[cfg(windows)]
+    {
+        let status = Command::new("setx")
+            .args(["WB_SWITCH_API_KEY", api_key])
+            .status()
+            .map_err(|error| format!("写入 Harness API Key 环境变量失败：{error}"))?;
+        if !status.success() {
+            return Err("写入 Harness API Key 环境变量失败".into());
+        }
+    }
+    Ok(())
+}
+
 fn dsh_import(paths: &ModelPaths, models: Vec<Value>, base_url: Option<&str>) -> Result<Vec<Value>, String> {
     let mut root = yaml_root(paths)?;
     let mut disabled = read_json_array(&paths.dsh_disabled)?;
@@ -953,7 +974,8 @@ pub fn local_dsh_models() -> Result<Value, String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn local_dsh_import(models: Vec<Value>, base_url: Option<String>) -> Result<Value, String> {
+pub fn local_dsh_import(models: Vec<Value>, base_url: Option<String>, api_key: Option<String>) -> Result<Value, String> {
+    set_harness_api_key(api_key.as_deref())?;
     Ok(json!({"models": dsh_import(&paths(), models, base_url.as_deref())?}))
 }
 
