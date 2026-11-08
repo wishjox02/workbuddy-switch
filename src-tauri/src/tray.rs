@@ -1170,10 +1170,10 @@ mod tests {
     #[test]
     fn app_bundle_path_from_packaged_exe() {
         use std::path::Path;
-        let exe = Path::new("/Applications/workbuddy-switch.app/Contents/MacOS/wb-switch-rust");
+        let exe = Path::new("/Applications/小玉米API.app/Contents/MacOS/小玉米API");
         assert_eq!(
             super::app_bundle_path_from_exe(exe),
-            Some(Path::new("/Applications/workbuddy-switch.app"))
+            Some(Path::new("/Applications/小玉米API.app"))
         );
     }
 
@@ -1186,7 +1186,7 @@ mod tests {
                 .is_none()
         );
         assert!(super::app_bundle_path_from_exe(Path::new(
-            "/Applications/workbuddy-switch.app/Contents/Resources/icon.icns"
+            "/Applications/小玉米API.app/Contents/Resources/icon.icns"
         ))
         .is_none());
     }

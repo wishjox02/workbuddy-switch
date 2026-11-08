@@ -24,7 +24,7 @@ fi
 
 V=$1
 ARCH=$2
-APP=${3:-target/release/bundle/macos/小玉米.app}
+APP=${3:-target/release/bundle/macos/小玉米API.app}
 
 if [ -z "$V" ] || [ -z "$ARCH" ]; then
   usage
