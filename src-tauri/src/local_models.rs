@@ -5,7 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-const MANAGED_PROVIDER: &str = "wb-switch";
+const MANAGED_PROVIDER: &str = "YumiModel";
+const LEGACY_MANAGED_PROVIDER: &str = "wb-switch";
+
+fn managed_provider(name: &str) -> bool {
+    name == MANAGED_PROVIDER || name == LEGACY_MANAGED_PROVIDER
+}
 
 struct ModelPaths {
     workbuddy: PathBuf,
@@ -468,15 +473,17 @@ fn dsh_provider_name_for_model(root: &YamlValue, id: &str) -> Option<String> {
     // Prefer the managed provider when a model ID appears in more than one provider. The
     // existing disable command only receives an ID; using a stable preference keeps that
     // command from disabling an unrelated provider's duplicate model.
-    if providers
-        .get(yaml_key(MANAGED_PROVIDER))
-        .and_then(|provider| provider.get("models"))
-        .and_then(YamlValue::as_sequence)
-        .into_iter()
-        .flatten()
-        .any(|model| dsh_model_id(model) == Some(id))
-    {
-        return Some(MANAGED_PROVIDER.to_string());
+    for name in [MANAGED_PROVIDER, LEGACY_MANAGED_PROVIDER] {
+        if providers
+            .get(yaml_key(name))
+            .and_then(|provider| provider.get("models"))
+            .and_then(YamlValue::as_sequence)
+            .into_iter()
+            .flatten()
+            .any(|model| dsh_model_id(model) == Some(id))
+        {
+            return Some(name.to_string());
+        }
     }
 
     providers.iter().find_map(|(name, provider)| {
@@ -525,7 +532,7 @@ fn dsh_disabled_provider_name(model: &Value) -> &str {
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|name| !name.is_empty())
-        .unwrap_or(MANAGED_PROVIDER)
+        .unwrap_or(LEGACY_MANAGED_PROVIDER)
 }
 
 fn public_dsh(paths: &ModelPaths) -> Result<Vec<Value>, String> {
@@ -541,7 +548,7 @@ fn public_dsh(paths: &ModelPaths) -> Result<Vec<Value>, String> {
                     continue;
                 };
                 let name = model.get("name").and_then(YamlValue::as_str).unwrap_or(id);
-                let managed = provider_name == MANAGED_PROVIDER && dsh_managed(model);
+                let managed = managed_provider(provider_name) && dsh_managed(model);
                 active_model_keys.insert((provider_name.to_string(), id.to_string()));
                 result.push(json!({"id": id, "name": name, "providerName": provider_name, "managed": managed, "disabled": false}));
             }
@@ -557,7 +564,7 @@ fn public_dsh(paths: &ModelPaths) -> Result<Vec<Value>, String> {
             continue;
         }
         let name = model.get("name").and_then(Value::as_str).unwrap_or(id);
-        let managed = provider_name == MANAGED_PROVIDER
+        let managed = managed_provider(provider_name)
             && disabled.iter().any(|item| {
                 model_id(item) == Some(id)
                     && dsh_disabled_provider_name(item) == provider_name
@@ -574,11 +581,39 @@ fn dsh_save(paths: &ModelPaths, root: &YamlValue) -> Result<(), String> {
     write_text(&paths.dsh, &text)
 }
 
-fn dsh_import(paths: &ModelPaths, models: Vec<Value>) -> Result<Vec<Value>, String> {
+fn dsh_import(paths: &ModelPaths, models: Vec<Value>, base_url: Option<&str>) -> Result<Vec<Value>, String> {
     let mut root = yaml_root(paths)?;
     let mut disabled = read_json_array(&paths.dsh_disabled)?;
+    let entries = root.as_sequence_mut().ok_or("Harness 配置根节点不是数组")?;
+    if !entries.iter().any(|item| item.get("id").and_then(YamlValue::as_str) == Some("llm-pi-ai")) {
+        entries.push(serde_yaml::from_str("id: llm-pi-ai\nname: '@deepseek-ai/dsh-llm-pi-ai'\nconfig:\n  providers: {}\n").map_err(|error| format!("创建 Harness 配置失败：{error}"))?);
+    }
+    let entry = entries.iter_mut().find(|item| item.get("id").and_then(YamlValue::as_str) == Some("llm-pi-ai")).unwrap();
+    let entry = entry.as_mapping_mut().ok_or("Harness 插件配置无效")?;
+    let config = entry.entry(yaml_key("config")).or_insert_with(|| YamlValue::Mapping(YamlMapping::new())).as_mapping_mut().ok_or("Harness 配置缺少有效 config")?;
+    let providers = config.entry(yaml_key("providers")).or_insert_with(|| YamlValue::Mapping(YamlMapping::new())).as_mapping_mut().ok_or("Harness 配置缺少有效 providers")?;
+    if !providers.contains_key(yaml_key(MANAGED_PROVIDER)) {
+        let provider = if let Some(legacy) = providers.remove(yaml_key(LEGACY_MANAGED_PROVIDER)) {
+            for model in &mut disabled {
+                if dsh_disabled_provider_name(model) == LEGACY_MANAGED_PROVIDER {
+                    if let Some(object) = model.as_object_mut() { object.insert("providerName".into(), json!(MANAGED_PROVIDER)); }
+                }
+            }
+            legacy
+        } else {
+            let base = base_url.filter(|value| reqwest::Url::parse(value).ok().is_some_and(|url| {
+                url.username().is_empty() && url.password().is_none() && url.host_str().is_some()
+                    && (url.scheme() == "https" || (url.scheme() == "http" && matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"))))
+            })).ok_or("无法创建 YumiModel：请先获取有效的模型服务地址")?;
+            serde_yaml::to_value(json!({"apiKeyEnv":"WB_SWITCH_API_KEY", "api":"openai-completions", "baseURL":base, "models":[]})).map_err(|error| format!("创建 Harness provider 失败：{error}"))?
+        };
+        providers.insert(yaml_key(MANAGED_PROVIDER), provider);
+    }
+    if let Some(provider) = providers.get_mut(yaml_key(MANAGED_PROVIDER)).and_then(YamlValue::as_mapping_mut) {
+        provider.insert(yaml_key("displayName"), YamlValue::String(MANAGED_PROVIDER.into()));
+    }
     let provider = dsh_provider_mut(&mut root)?
-        .ok_or("Harness 中不存在 wb-switch provider，不能创建缺少连接配置的 provider")?;
+        .ok_or("Harness 中不存在 YumiModel provider")?;
     if !usable_dsh_provider(provider) {
         return Err("Harness wb-switch provider 缺少有效 baseURL 或 apiKeyEnv".into());
     }
@@ -586,7 +621,7 @@ fn dsh_import(paths: &ModelPaths, models: Vec<Value>) -> Result<Vec<Value>, Stri
         .get_mut(yaml_key("models"))
         .and_then(YamlValue::as_sequence_mut)
         .ok_or("Harness wb-switch models 不是数组")?;
-    let mut changed = false;
+    let mut changed = true;
     for input in models {
         let Some(id) = model_id(&input)
             .map(str::trim)
@@ -651,10 +686,10 @@ fn dsh_import(paths: &ModelPaths, models: Vec<Value>) -> Result<Vec<Value>, Stri
 fn dsh_remove(paths: &ModelPaths, id: &str) -> Result<Vec<Value>, String> {
     let root = yaml_root(paths)?;
     if let Some(provider_name) = dsh_provider_name_for_model(&root, id) {
-        if provider_name == MANAGED_PROVIDER {
+        if managed_provider(&provider_name) {
             if let Some(provider) = dsh_providers(&root).and_then(|providers| {
                 providers
-                    .get(yaml_key(MANAGED_PROVIDER))
+                    .get(yaml_key(&provider_name))
                     .and_then(YamlValue::as_mapping)
             }) {
                 if let Some(model) = provider
@@ -675,7 +710,7 @@ fn dsh_remove(paths: &ModelPaths, id: &str) -> Result<Vec<Value>, String> {
 
     let disabled = read_json_array(&paths.dsh_disabled)?;
     if let Some(model) = disabled.iter().find(|model| model_id(model) == Some(id)) {
-        if dsh_disabled_provider_name(model) == MANAGED_PROVIDER
+        if managed_provider(dsh_disabled_provider_name(model))
             && model.get("managed").and_then(Value::as_bool) != Some(false)
         {
             return Err("Switch 管理模型只能禁用或启用，不能移除".into());
@@ -703,14 +738,14 @@ fn dsh_remove_external(
             .and_then(YamlValue::as_sequence_mut)
         {
             if models.iter().any(|model| dsh_model_id(model) == Some(id)) {
-                if provider_name == MANAGED_PROVIDER
+                if managed_provider(provider_name)
                     && models
                         .iter()
                         .any(|model| dsh_model_id(model) == Some(id) && dsh_managed(model))
                 {
                     return Err("Switch 管理模型只能禁用或启用，不能移除".into());
                 }
-                if provider_name == MANAGED_PROVIDER
+                if managed_provider(provider_name)
                     && disabled.iter().any(|model| {
                         model_id(model) == Some(id)
                             && dsh_disabled_provider_name(model) == provider_name
@@ -737,7 +772,7 @@ fn dsh_remove_external(
     if disabled.iter().any(|model| {
         model_id(model) == Some(id) && dsh_disabled_provider_name(model) == provider_name
     }) {
-        if provider_name == MANAGED_PROVIDER
+        if managed_provider(provider_name)
             && disabled.iter().any(|model| {
                 model_id(model) == Some(id)
                     && dsh_disabled_provider_name(model) == provider_name
@@ -829,7 +864,7 @@ fn dsh_enable_for_provider(
     let mut root = yaml_root(paths)?;
     let provider = dsh_provider_mut_by_name(&mut root, &provider_name)?
         .ok_or("Harness 中不存在被禁用模型的 provider")?;
-    if provider_name == MANAGED_PROVIDER && !usable_dsh_provider(provider) {
+    if managed_provider(&provider_name) && !usable_dsh_provider(provider) {
         return Err("Harness wb-switch provider 缺少有效 baseURL 或 apiKeyEnv".into());
     }
     let models = provider
@@ -918,8 +953,8 @@ pub fn local_dsh_models() -> Result<Value, String> {
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn local_dsh_import(models: Vec<Value>) -> Result<Value, String> {
-    Ok(json!({"models": dsh_import(&paths(), models)?}))
+pub fn local_dsh_import(models: Vec<Value>, base_url: Option<String>) -> Result<Value, String> {
+    Ok(json!({"models": dsh_import(&paths(), models, base_url.as_deref())?}))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -1054,11 +1089,11 @@ mod tests {
     }
 
     fn dsh_fixture() -> &'static str {
-        "- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      my:\n        models:\n          - id: other\n            name: Other\n      wb-switch:\n        displayName: WorkBuddy Switch\n        apiKeyEnv: WB_SWITCH_API_KEY\n        api: openai-completions\n        baseURL: https://models.example/v1\n        models:\n          - id: seed\n            name: Seed\n            managed: true\n"
+        "- id: llm-pi-ai\n  name: '@deepseek-ai/dsh-llm-pi-ai'\n  config:\n    providers:\n      my:\n        models:\n          - id: other\n            name: Other\n      YumiModel:\n        displayName: YumiModel\n        apiKeyEnv: WB_SWITCH_API_KEY\n        api: openai-completions\n        baseURL: https://models.example/v1\n        models:\n          - id: seed\n            name: Seed\n            managed: true\n"
     }
 
     fn dsh_duplicate_fixture() -> &'static str {
-        "- id: llm-pi-ai\n  config:\n    providers:\n      first:\n        models:\n          - id: duplicate\n            name: First\n      second:\n        models:\n          - id: duplicate\n            name: Second\n      wb-switch:\n        apiKeyEnv: WB_SWITCH_API_KEY\n        baseURL: https://models.example/v1\n        models:\n          - id: duplicate\n            name: Managed\n            managed: true\n"
+        "- id: llm-pi-ai\n  config:\n    providers:\n      first:\n        models:\n          - id: duplicate\n            name: First\n      second:\n        models:\n          - id: duplicate\n            name: Second\n      YumiModel:\n        apiKeyEnv: WB_SWITCH_API_KEY\n        baseURL: https://models.example/v1\n        models:\n          - id: duplicate\n            name: Managed\n            managed: true\n"
     }
 
     #[test]
@@ -1310,14 +1345,39 @@ mod tests {
     }
 
     #[test]
-    fn harness_requires_existing_complete_provider() {
+    fn harness_creates_provider_with_backend_url() {
         let temp = TempModels::new();
-        let yaml = "- id: llm-pi-ai\n  config:\n    providers:\n      my:\n        models: []\n";
+        let yaml = "- id: llm-pi-ai\n  config:\n    providers:\n      my:\n        models:\n          - id: other\n";
         write_text(&temp.paths.dsh, yaml).unwrap();
-        assert!(dsh_import(&temp.paths, vec![json!({"id":"new"})])
+        assert!(dsh_import(&temp.paths, vec![json!({"id":"new"})], None)
             .unwrap_err()
-            .contains("不存在 wb-switch provider"));
+            .contains("有效的模型服务地址"));
         assert_eq!(std::fs::read_to_string(&temp.paths.dsh).unwrap(), yaml);
+        let models = dsh_import(&temp.paths, vec![json!({"id":"new"})], Some("https://models.example/v1")).unwrap();
+        assert!(models.iter().any(|model| model["id"] == "new" && model["providerName"] == "YumiModel"));
+        assert!(models.iter().any(|model| model["id"] == "other" && model["providerName"] == "my"));
+    }
+
+    #[test]
+    fn harness_creates_missing_plugin_and_rejects_bad_url() {
+        let temp = TempModels::new();
+        assert!(dsh_import(&temp.paths, vec![json!({"id":"new"})], Some("https://user:pass@example.com/v1")).is_err());
+        assert!(!temp.paths.dsh.exists());
+        let models = dsh_import(&temp.paths, vec![json!({"id":"new"})], Some("https://models.example/v1")).unwrap();
+        assert!(models.iter().any(|model| model["providerName"] == MANAGED_PROVIDER));
+    }
+
+    #[test]
+    fn harness_migrates_legacy_provider_and_disabled_models() {
+        let temp = TempModels::new();
+        let legacy = dsh_fixture().replace("YumiModel", LEGACY_MANAGED_PROVIDER);
+        write_text(&temp.paths.dsh, &legacy).unwrap();
+        write_json_array(&temp.paths.dsh_disabled, &[json!({"id":"old-disabled", "providerName":LEGACY_MANAGED_PROVIDER, "managed":true})]).unwrap();
+        let models = dsh_import(&temp.paths, vec![json!({"id":"new"})], Some("https://models.example/v1")).unwrap();
+        assert!(models.iter().any(|model| model["id"] == "seed" && model["providerName"] == MANAGED_PROVIDER));
+        assert!(models.iter().any(|model| model["id"] == "old-disabled" && model["providerName"] == MANAGED_PROVIDER && model["disabled"] == true));
+        assert!(!dsh_providers(&yaml_root(&temp.paths).unwrap()).unwrap().contains_key(yaml_key(LEGACY_MANAGED_PROVIDER)));
+        dsh_enable_for_provider(&temp.paths, "old-disabled", Some(MANAGED_PROVIDER)).unwrap();
     }
 
     #[test]
@@ -1594,7 +1654,7 @@ mod tests {
     fn harness_remove_all_rejects_managed_and_preserves_other_provider() {
         let temp = TempModels::new();
         write_text(&temp.paths.dsh, dsh_fixture()).unwrap();
-        dsh_import(&temp.paths, vec![json!({"id":"second"})]).unwrap();
+        dsh_import(&temp.paths, vec![json!({"id":"second"})], None).unwrap();
         dsh_disable_for_provider(&temp.paths, "second", None).unwrap();
         assert!(dsh_remove_all(&temp.paths)
             .unwrap_err()
