@@ -123,3 +123,13 @@ workbuddy-switch status       # 终端查看当前账号
 应用可向用户配置的后台地址发送匿名安装心跳，用于统计安装规模和功能使用情况。心跳可能包含随机安装 ID、应用版本、操作系统、架构、语言、账号数量和功能事件计数，不包含账号凭据、模型 API Key、手机号、聊天内容或请求正文。用户可以通过不使用后台服务或在网络层阻止该请求来停止心跳发送。
 
 项目维护者仅为提供服务、排查故障和发布更新而处理必要数据，不出售或用于广告画像。隐私问题和数据删除请求可联系 `wishjoxgood@gmail.com`。本政策会随数据处理方式变化而更新。
+
+## Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+
+- Committers and reviewers: the project repository maintainers with write access to the GitHub repository.
+- Approvers: the project maintainer, 金伟.
+- Signed artifacts are built by the repository's GitHub Actions workflow from this source repository.
+- The signing service is used only for binaries built from this project's source code and build scripts.
+- This project does not transfer user information to other networked systems unless the user configures or requests that service. See the [privacy policy](#隐私政策).
