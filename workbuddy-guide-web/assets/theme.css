@@ -109,7 +109,12 @@ ul { margin: 0; padding: 0; list-style: none; }
 .rail__name { font-size: 13.5px; font-weight: 650; line-height: 1.35; }
 .rail__sub { font-size: 11px; color: var(--dim); letter-spacing: 0.06em; text-transform: uppercase; }
 
-.rail__nav { display: flex; flex-direction: column; gap: 1px; }
+.rail__nav { display: flex; flex-direction: column; gap: 13px; }
+.rail__group { display: grid; gap: 2px; }
+.rail__group > span {
+  padding: 0 10px 4px; color: var(--dim); font-family: var(--mono);
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+}
 .rail__nav a {
   display: flex; align-items: center; gap: 9px;
   padding: 6.5px 10px; border-radius: var(--radius-sm);
@@ -179,6 +184,21 @@ ul { margin: 0; padding: 0; list-style: none; }
 }
 .btn--solid:hover { color: #06111a; filter: brightness(1.08); }
 
+/* ---------- 阅读地图 ---------- */
+.atlas-map {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px;
+  max-width: 920px; margin-top: 34px;
+}
+.atlas-map__item {
+  min-width: 0; padding: 12px 13px; border: 1px solid var(--line);
+  border-radius: var(--radius-sm); background: color-mix(in srgb, var(--panel) 82%, transparent);
+  display: grid; gap: 3px; transition: border-color .16s, background .16s, transform .16s;
+}
+.atlas-map__item:hover { border-color: var(--mint); background: var(--panel-2); transform: translateY(-2px); }
+.atlas-map__num { color: var(--mint); font: 10px var(--mono); letter-spacing: .08em; }
+.atlas-map__item strong { font-size: 13px; font-weight: 650; }
+.atlas-map__item small { color: var(--dim); font-size: 11px; line-height: 1.5; }
+
 /* ---------- 数字卡 ---------- */
 .stats {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
@@ -203,14 +223,15 @@ ul { margin: 0; padding: 0; list-style: none; }
 .stat__n { font-size: 11px; color: var(--dim); margin-top: 7px; line-height: 1.5; }
 
 /* ---------- 区块 ---------- */
-.section { padding: clamp(54px, 7vw, 88px) 0 0; scroll-margin-top: 14px; }
+.section { padding: clamp(64px, 8vw, 104px) 0 0; scroll-margin-top: 14px; }
+.section + .section { border-top: 1px solid var(--line); margin-top: 64px; }
 .sec-head { margin-bottom: 30px; max-width: 74ch; }
 .sec-head__idx {
   font-family: var(--mono); font-size: 11.5px; color: var(--mint);
   letter-spacing: 0.16em; display: block; margin-bottom: 9px;
 }
 .sec-head h2 { font-size: clamp(22px, 2.9vw, 30px); font-weight: 680; }
-.sec-head p { color: var(--txt-2); margin-top: 11px; font-size: 14.5px; }
+.sec-head p { color: var(--txt-2); margin-top: 11px; font-size: 14.5px; max-width: 68ch; }
 
 /* ---------- 认知卡片 ---------- */
 .grid { display: grid; gap: 12px; }
@@ -544,6 +565,8 @@ details p { font-size: 13px; color: var(--txt-2); margin-top: 9px; padding-top: 
     overflow-x: auto; overflow-y: hidden;
   }
   .rail__nav { flex-direction: row; gap: 2px; overflow-x: auto; }
+  .rail__group { display: contents; }
+  .rail__group > span { display: none; }
   .rail__nav a { white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; padding: 6px 9px; }
   .rail__nav a.on { border-left: 0; border-bottom-color: var(--mint); }
   .rail__nav a i { display: none; }
@@ -562,6 +585,9 @@ details p { font-size: 13px; color: var(--txt-2); margin-top: 9px; padding-top: 
   .forge__label { width: 100%; }
   .deep .card { grid-template-columns: 1fr; }
   .deep__lvl { width: 52px; }
+  .atlas-map { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 26px; }
+  .atlas-map__item:last-child { grid-column: 1 / -1; }
+  .section + .section { margin-top: 42px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

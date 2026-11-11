@@ -29,18 +29,12 @@
     </div>
   </div>
 
-  <nav class="rail__nav" id="railnav">
-    <a href="#product"><i>01</i>产品认知</a>
-    <a href="#layers"><i>02</i>能力六层</a>
-    <a href="#scenes"><i>03</i>场景矩阵</a>
-    <a href="#prompts"><i>04</i>指令工坊</a>
-    <a href="#cases"><i>05</i>案例库</a>
-    <a href="#topics"><i>06</i>专题与模板</a>
-    <a href="#roadmap"><i>07</i>岗位与行业</a>
-    <a href="#auto"><i>08</i>自动化可靠性</a>
-    <a href="#knowledge"><i>09</i>知识库</a>
-    <a href="#learn"><i>10</i>上手路线与排错</a>
-    <a href="#library"><i>11</i>原文库</a>
+  <nav class="rail__nav" id="railnav" aria-label="资料导航">
+    <div class="rail__group"><span>01 · 认识</span><a href="#product"><i>01</i>产品认知</a><a href="#layers"><i>02</i>能力六层</a></div>
+    <div class="rail__group"><span>02 · 上手</span><a href="#learn"><i>03</i>学习路线与排错</a><a href="#scenes"><i>04</i>场景矩阵</a></div>
+    <div class="rail__group"><span>03 · 做事</span><a href="#prompts"><i>05</i>指令工坊</a><a href="#cases"><i>06</i>案例库</a><a href="#topics"><i>07</i>专题与模板</a></div>
+    <div class="rail__group"><span>04 · 固化</span><a href="#roadmap"><i>08</i>岗位与行业</a><a href="#knowledge"><i>09</i>知识库</a><a href="#auto"><i>10</i>自动化可靠性</a></div>
+    <div class="rail__group"><span>05 · 查证</span><a href="#library"><i>11</i>原文库</a></div>
   </nav>
 
   <button class="rail-toggle" id="themeBtn" type="button">
@@ -71,6 +65,13 @@
       <a class="btn btn--solid" href="#scenes">进场景矩阵 →</a>
       <a class="btn" href="#prompts">直接抄指令</a>
       <a class="btn" href="#learn">七天怎么练</a>
+    </div>
+    <div class="atlas-map" aria-label="阅读路线">
+      <a class="atlas-map__item" href="#product"><span class="atlas-map__num">01</span><strong>认识</strong><small>定位、模式、能力层</small></a>
+      <a class="atlas-map__item" href="#learn"><span class="atlas-map__num">02</span><strong>上手</strong><small>七天路线、排错、场景</small></a>
+      <a class="atlas-map__item" href="#prompts"><span class="atlas-map__num">03</span><strong>做事</strong><small>指令、案例、模板</small></a>
+      <a class="atlas-map__item" href="#knowledge"><span class="atlas-map__num">04</span><strong>固化</strong><small>岗位、知识库、自动化</small></a>
+      <a class="atlas-map__item" href="#library"><span class="atlas-map__num">05</span><strong>查证</strong><small>42 篇资料原文</small></a>
     </div>
     <div class="stats" id="stats"></div>
   </header>
