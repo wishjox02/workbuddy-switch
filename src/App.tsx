@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { BrowserRouter, HashRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { ArrowUp, BarChart3, Boxes, Gift, Headphones, LogIn, LogOut, Megaphone, Settings2, ShoppingBag, Sparkles, UserRound, Wallet, X } from "lucide-react";
+import { ArrowUp, BarChart3, BookOpen, Boxes, Gift, Headphones, LogIn, LogOut, Megaphone, Settings2, ShoppingBag, Sparkles, UserRound, Wallet, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import * as api from "@/lib/api";
@@ -14,6 +14,7 @@ import ModelMarketPage from "@/pages/ModelMarketPage";
 import RechargePage from "@/pages/RechargePage";
 import RedeemPage from "@/pages/RedeemPage";
 import CustomerServicePage from "@/pages/CustomerServicePage";
+import GuidePage from "@/pages/GuidePage";
 import { CustomModelUsageTab } from "@/components/custom-model-usage-tab";
 import { AppIconMark } from "@/components/product-marks";
 import { Badge } from "@/components/ui/badge";
@@ -56,6 +57,7 @@ function TotalCreditBar() {
   const location = useLocation();
   const pageHeadings: Record<string, [string, string?]> = {
     "/": ["账号管理", "管理 WorkBuddy 账号、积分与签到状态"],
+    "/guide": ["使用向导", "从第一次提问到可复用工作流"],
     "/credit-stats": ["积分统计", "查看账号积分和用量"],
     "/token-stats": ["Token 统计", "查看 Token 用量"],
     "/models": ["我的模型"],
@@ -401,6 +403,7 @@ function Layout() {
 
   const navGroups = [
     { title: "WorkBuddy", items: [
+      { to: "/guide", label: "使用向导", icon: BookOpen },
       { to: "/", label: "账号管理", icon: UserRound, end: true },
       { to: "/credit-stats", label: "积分统计", icon: Sparkles },
       { to: "/token-stats", label: "Token 统计", icon: BarChart3 },
@@ -464,6 +467,7 @@ export default function App() {
         <Routes>
           <Route element={<ClientAuthGate><Layout /></ClientAuthGate>}>
             <Route path="/" element={<AccountsPage />} />
+            <Route path="/guide" element={<GuidePage />} />
             <Route path="/models" element={<ModelsPage />} />
             <Route path="/model-market" element={<ModelMarketPage />} />
             <Route path="/recharge" element={<RechargePage />} />

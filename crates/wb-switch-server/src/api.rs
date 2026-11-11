@@ -69,6 +69,7 @@ pub fn set_local_api_token(token: String) {
 pub fn router() -> Router {
     Router::new()
         .route("/api/status", get(api_status))
+        .route("/api/guide", get(api_guide))
         .route("/api/accounts", get(api_accounts))
         .route("/api/codebuddy-cli/status", get(api_codebuddy_cli_status))
         .route(
@@ -323,6 +324,24 @@ fn query_param(query: Option<&str>, key: &str) -> Option<String> {
 // ---------------------------------------------------------------------------
 // 状态 / 账号
 // ---------------------------------------------------------------------------
+
+/// GET /api/guide —— 向导资料元数据，供 WebUI 显示资料版本与章节状态。
+/// 正文随前端发布，服务端提供同源能力与资料更新时间，便于后续后台替换内容。
+async fn api_guide() -> Response {
+    json_ok(json!({
+        "version": "1.0",
+        "updatedAt": "2026-11",
+        "source": "WorkBuddy 使用手册、基础手册、128 页速通包与 WorkBuddy × ima 资料",
+        "steps": [
+            { "id": "start", "title": "先建立正确认知" },
+            { "id": "task", "title": "完成第一个任务" },
+            { "id": "workspace", "title": "文件、工作区与权限" },
+            { "id": "skills", "title": "Skill、连接器与知识库" },
+            { "id": "scenes", "title": "从岗位场景开始" },
+            { "id": "safety", "title": "验收与持续改进" }
+        ]
+    }))
+}
 
 async fn api_status(RawQuery(query): RawQuery) -> Response {
     let variant = query_variant(query.as_deref());
