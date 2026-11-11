@@ -146,7 +146,23 @@ ul { margin: 0; padding: 0; list-style: none; }
   margin-left: var(--rail);
   padding: 0 clamp(20px, 4vw, 56px) 100px;
   max-width: calc(var(--rail) + 1240px);
+  display: flex; flex-direction: column;
 }
+
+/* 正文阅读顺序与左侧章节导航保持一致。HTML 保持数据渲染所需的稳定锚点。 */
+.hero { order: 0; }
+#product { order: 10; }
+#layers { order: 20; }
+#learn { order: 30; }
+#scenes { order: 40; }
+#prompts { order: 50; }
+#cases { order: 60; }
+#topics { order: 70; }
+#roadmap { order: 80; }
+#knowledge { order: 90; }
+#auto { order: 100; }
+#library { order: 110; }
+.foot { order: 120; }
 
 /* ---------- Hero ---------- */
 .hero { padding: clamp(56px, 8vw, 104px) 0 20px; }
