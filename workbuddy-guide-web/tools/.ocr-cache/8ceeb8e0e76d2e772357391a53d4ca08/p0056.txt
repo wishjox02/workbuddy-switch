@@ -1,0 +1,15 @@
+微信公众号：打磨院
+示例指令，如下图所示：
+@e
+指令：https://updatecdn.meeting.qq.com/cos/290ed263270aa55d4f380bfa32e1297f/tencent-meeting-mcp.zip下载zip包并
+unzip解压，帮我安装这个skill，然后设置环境变量
+TENCENT_MEETING_TOKEN=V
+Craft
+ZGLM-5.0-TurboSkills
+会议
+安装过程中，WorkBuddy会自动创建任务，并完成下载、解析和配置等步骤。
+2 个待办任务
+复制 skill 文件到用户级 skills 目录
+配置MCP服务（含Token环境变量）
+安装完成后，可在已安装技能列表中看到腾讯会议Skill。
+更多精彩内容访问：dmy.base44.app

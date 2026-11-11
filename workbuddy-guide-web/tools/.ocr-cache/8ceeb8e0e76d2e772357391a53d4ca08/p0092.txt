@@ -1,0 +1,124 @@
+微信公众号：打磨院
+帮我把WorkBuddy文件夹下今天新建的文件夹的内容读取一下，然后把每一个文件夹.
+产物
+全部文件
+<>变更
+预览
+WorkBuddy
+D
+产物
+3个待办任务
+Q搜索任务
+任务列表
+创建 overview.md +23 -0
+overview
+新建任务
+展示日报汇总文件供用户查看
+读取今天所有文件夹内容
+③已打开00-日报素材汇总.md arti
+文件变更
+Claw
+为每个文件夹梳理生成独立md
+摘定了！所有文件已经整理好，放在你的ObsidianVault里：
+专家
+/Users/bellon/Documents/0bsidian Vault/2026-03-18/下共6个文件：
+在obsidian文件夹下创建日期文件夹汇总
+技能
+文件
+内容
+00-日报素材汇总.md
+总索引+可直接复制的日报速写版
+自动化
+01-WorkBuddy官网Landing Page设
+.md
+官网页面设计开发（数图素材+HTML页面）
+√我是哪里人
+22分钟前
+02-文章分析-独家对话谢赛宁.md
+谢赛宁访读深度分析（AMI Labs/世界模型/LLM批
+已完/成
+判
+03-Nova办公文档套件生成.md
+4种格式办公文档生成(DOCX/PDF/PPTX/XLSX)
+√记佳，我是测北人，不爱吃辣22分钟相
+已光/成
+04-视频转录-WorkBuddy工具介绍.md节目中WorkBuddy 演示片段转录分析
+05-视频接要-A理财实验.md
+B站AI理财实验视频转录+摘要
+帮我Ehttps://www.bilbili.com.. 1r)时期
+已究/
+今天13个文件夹里有6个是空的已跳过，剩下7个按内容关联性合并成了5个主题，00-日
+报素材汇总.md里的*日报速写版“部分可以直接复制粘贴到日报里用，打开Obsidian就能看
+展开更多(42)
+到了.
+工作空润
+20260318114314
+任务产生制品（2个）：
+√我是一个产品经理，帮我找一18分钟的
+G Tasks
+overview
+壹看全邮制品
+已完成
+安装这个skill到.workbuddy下.3小时前
+任务列表3/3
+已完成
+所有任务已完成
+使用Agent Browser打开腾..
+3小时前
+@
+已完线
+输入消息
+Craft
+GLM-5.0 Sils
+白
+Q
+口
+关系图谱
+口
+白
+关系围谱
+品
+2026-03-18
+器
+00-日报素材汇总
+01-WorkBuddy官网Landing Page设计
+D
+02-文意分析-独家对话谢赛宁
+03-Nova办公文档套件生成
+>
+04-视频转录-WorkBuddy工具介绍
+05-视频搞要-A理财实验
+管理学
+>LLM医疗诊断论文集
+管理的四大职能：计划、组织、领导、控制
+管理者的角色与层级
+暂效率与管理效量
+年轻时如何复利避免局部最优
+如何用AI像到十倍速学习
+未命名
+A/辑助十倍速学习法：从Bloom理论到本地化实践
+03-Ne
+Bloom Learm IEB4 WorkBuddy Obsidian Skil 美高邮
+prompt context
+dey工具介绍
+code dlrir@ OPT-d asaMe
+cal Lcenarg Exanin
+Stuly
+rg LMR
+rrg
+fupport
+bot Res
+OPT pss
+论文索引_2023-2025
+。
+@Lrgt langitge moo
+on af LM-based
+tiage
+Obsidian Vault
+?
+六、使用建议
+适合进行长期知识沉淀：特别适用于日报、周报、项目记录以及个人知识库。
+建议提前规划好目录：例如日报、项目、灵感、会议纪要等。
+能够与后续笔记形成联动：便于持续开展搜索、复盘以及知识关联工作。
+D
+更多精彩内容访问：dmy.base44.app

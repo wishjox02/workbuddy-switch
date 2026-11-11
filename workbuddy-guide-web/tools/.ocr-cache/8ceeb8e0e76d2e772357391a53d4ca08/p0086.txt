@@ -1,0 +1,93 @@
+微信公众号：打磨院
+四、能力概览
+PDF：提取正文、提取表格、进行OCR识别、拆分与合并、处理表单
+DOCX：生成文档、整理文档结构、补充目录、补充页码、处理批注与修订
+PPTX：读取现有幻灯片、总结每页内容、压缩结构、重新制作演示文稿
+XLSX：清洗表格数据、补充公式、整理列数据、输出汇总结果
+五、使用建议
+遇到何种文件，就运用相应的Skill，这是最为稳妥的使用方式。
+明确输出结果，例如提取文本、生成新文件、补充公式或调整结构。
+优先处理原始文件，这样能够减少手动格式转换所带来的损耗。
+六、效果示意
+使用PDF / Word / PPT / Excel ski
+口
+产物
+全部文件
+《>变更
+预览
+WorkBuddy
+D
+创建
+Q1_2026_Team_Review.pptx Presentation
+Q搜索任务
+清理临时构建脚本
+任务列表
+1/5
+新建任务
+_ cd /Users/be
+on/WorkBuddy/20260318163430 && rm -
+好的，保留脚本文件，现在更新overview
+2026年Q1季
+预置效果仅供参考，可能与实际文件存在差异，请以下载后的
+Claw
+Nova_Proje...
+专家
+四个文件全部就绪！展示一下PDF作为代表：
+日01_2026_
+展示创建的PDF季度报告文件
+Nova_Sales.
+技能
+已打开
+四个办公文档全部创建完毕！
+下成果总结
+Q1 2026
+自动化
+文件
+格式大小
+内容
+任务
+2026年Q1度报告.pdf
+6.7KB
+3页季度报告：封面财务数据表+
+PDF
+TEAMPERFORMANCER
+运营里程碘+Q2展望
+使用local whisper ski帮我把
+12分用
+执行甲
+项目提案：背震分析、目标、交付范
+Nova_Project_Proposal.docx Word13KB图、时间线、400万美元预算、风险
+使用PDF/Word/PPT/Ex
+评估
+已究
+Q1_2026_Team_Review.pptx PPT157KB
+5页演示标题页、KPI卡片、收入图
+Nova Technologies Inc.
+表、里程碘卡片、Q2展望
+Strategy&Operations|March 18.2026
+使用Agent Browser打开这个.33分特前
+Nova_Sales_Dashboard.xlsx Excel12KB
+3个工作表：月度销售、团队业绩、
+已光/
+产品指标，金部使用Excel公式+图表
+帮我检查当前.workbuddy目...
+5小时用
+所有文件都以虚构公司NovaTechnologies为主题，内容连贯统一，涵盖了企业常见的
+已充质
+季报、提案、汇报、数据分析等办公场景。你可以直接用Office 软件或macOS预筹
+开它们。
+一共有多少种风格？
+19小时前
+已完虎
+任务列表4/4
+展开更多(35)
+工作空间
+KeyPerformance1
+小时前
+Skils
+3） Local Whisper
+一、基本信息
+安装名：local-whisper
+仓库来源：GitHub
+二、功能简介
+更多精彩内容访问：dmy.base44.app

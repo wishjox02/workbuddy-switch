@@ -1,0 +1,17 @@
+微信公众号：打磨院
+MCP服务管理
+配置MCP
+安装MCP服务，为AI扩展更多工具能力
+Q
+搜索服务器...
+MCP Hub
+我的MCP
+1启用
+tencent-meeting-mcp
+20 tools
+3）填写 mcp.json
+将以下配置复制粘贴到编辑器中，把your-webhook-url替换为实际地址后保存：
+"mcpServers": {
+"wecom": {
+"command": "uvx",
+更多精彩内容访问：dmy.base44.app

@@ -1,0 +1,45 @@
+微信公众号：打磨院
+MCP服务管理
+配置MCP
+X
+安装MCP服务，为AI扩展更多工具能力
+<返回MCP列表
+取消
+保存
+配置文件路径：/Users/kongdeyuan/.workbuddy/mcp.json
+1
+2
+"mcpServers":{
+3
+"wecom":{
+4
+"command": "uvx",
+5
+"args":[
+6
+"wecom-bot-mcp-server"
+7
+8
+"env":{
+9
+"WECOM_wEBHooK_URL":"https://qyapi.weixin.qq.com/cgi-bin/
+webhook/send?key=8ef877d5-7f76-45fa-b1f9-c8f27acb8f93"
+10
+11
+12
+13
+MCP服务管理
+配置MCP
+安装MCP服务，为AI扩展更多工具能力
+搜索服务器...
+MCP Hub
+我的MCP
+1启用
+wecom
+W
+6 tools
+五、使用方式
+配置完成后，用自然语言描述需求即可，WorkBuddy会自动调用对应的MCPServer。
+示例指令：
+请通过企业微信机器人通知：正式产品已发布，请@xXXX进行验收。
+更多精彩内容访问：dmy.base44.app

@@ -1,0 +1,117 @@
+微信公众号：打磨院
+技能
+Q ppt
++添加技能
+赋予 WorkBuddy 更强大的能力
+已安装24
+pptx
+01 SE
+为你找到97个结果
+description：将用户讲稿SiHub
+Ppt Ooxml Translator SsilIHub
+PPTX PDF Font Fix SkilIHub
+将用户讲稿一健生成乔布斯风极简科技感资
+将用户讲稿一键生成乔布斯风极简科技感资
+Al-agent Ski for PPTX OOXML
+屏HTML演示稿。当用户需要生成PPT、
+屏HTML演示稿。当用户需要生成PPT、
+localiztion workfiows. Use it to unpe
+PDF export by patching text.
+Ppt Generator 1 skilHub
+PPT Workflow SkiHub
+PPT Translator SkilIHub
+Ppt Outline SkilIHub
+将用户讲稿一健生成乔布斯风极简科技感竖
+基于标准化工作流的PPT制作技能。从内
+Translate PowerPoint files to any
+PPT outine and HTML, presentation
+属HTML演示稿。当用户灵要生成PPT、
+容握索到美化优化的全流程自动化。只需.
+9sn “inofe[ SuAueseud egum aBenfue]
+generator.PPT大纲、PPT模板、演示文。
+一键生成PPT截图和继略SkilHub
+一键生成PPT截图和缩略.SkiHub
+PPT Compressor SkiHub
+教案内容写入PPT备注SkiHub
+自动将Mac版PPT转换为都页PNG截图及每
+自动将指定Mac路径下的PPT搜页生成截图
+Compress PPT/PPTX fle size.
+每用一键更新PPT讲师备注。从数案中提取
+6页缠略拼接图，支持自定义DPI和布局，
+和缩路图，并发布到微信公众号，支持自..
+Decompress PPT, compress large.
+讲师活动，自动写入对应PPT幻灯片备注
+PPT AFP SkiHub
+PPT Presenter - 带速...
+SkilIHub
+Pptx Anthropic SskilIHub
+onrs oap o opn Ldd
+PPT全自动生成流[AFP: Auto-Flow
+Create professonal eveal.is HTML
+s) as xqdd' e oug Aue (s sug os
+sxpap apis snd opne uogeueu uanuog
+Prompt) 。 用户提供主题和内容，Agen
+involved in any way  as input, output,
+into a narrated video. Use when the us.
+Ai Ppt Generator SkilHub
+Powerpoint / PPTX skiHub
+Test SkiHub
+PPT制作SkilIHub
+Generate PPT with Baidu Al. Smart
+Create, inspect, and edit Microsoft
+使用python-pptx制作科技风PPT，支持多
+template seliection based on content
+PoverPoint presentations and PPTX.
+generator.PPT大纲、PPT模板、淡示文..
+布局、多图文湿排及HTML内容派入，轻
+AI PPT generate SkilIHub
+PowerPoint Automation SkilIHub
+NanoBanana PPT Skills Skifiub
+Markdown Converter SkiIHub
+The intelligent PPT generation tool is
+Automate common PowerPoint/WPS
+基于AI自动分析文档内容，智能规划并生
+Convert documents and files to
+provided by Baidu. It is a tool that..
+Presentation operations on Windows v.
+成多风格高清PPT图片，支持可退转场
+Markdown using markitdown. Use whe
+help you to make annu....
+SkillHub
+PPT Presenter - 带速...
+Auto Ppt SkilHlu
+McKinsey PPT Design ...
+SkiHub
+A年终总结PPT生成器。用户输入姓名、年
+Generate professional HTMIL
+自动生成桶美PPT演系文稿-通过
+Create professional, consultant-grade
+份、工作成果亮点和下一年度规划，自动
+presentations with slide content,
+Google NotebookLM生成图文井茂、设
+Slides/PPT generation .. SkiIIHub
+NotebookLM PPT SkilIHub
+Report Ppt Generator P... SkilHub
+Al-powered presentation generation
+使用NotebookLMCLI生成PPT演示文
+文档处理技能-让AI能够读取、解析、提
+using 2slides API. Create slides from.
+稿。从预置风格模板库中选择模板，通过。
+presentations frem text manuscripts a.
+取PDF、DOCX、PPT等文档的关键信
+9.2 精选 Skills 推荐
+1）Agent Browser
+一、基本信息
+安装名：agent-browser
+仓库来源：GitHub
+二、功能简介
+AgentBrowser可使WorkBuddy直接访问网页并执行浏览器级别的操作，例如打开页面、
+滚动页面、点击操作、展开内容、截取屏幕以及读取网页信息。对于那些需进行交互后才能显
+示内容的页面，此Skill能大幅提升页面的可访问性。
+三、适用场景
+需要滚动、点击或展开操作后才可读取内容的网页
+需要对指定页面进行自动截图
+需要检查按钮、表单或页面结构
+需要进入网站后抓取指定信息
+D
+更多精彩内容访问：dmy.base44.app

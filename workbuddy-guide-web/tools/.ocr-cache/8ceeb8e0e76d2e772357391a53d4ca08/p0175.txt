@@ -1,0 +1,27 @@
+微信公众号：打磨院
+14:08
+WeChat
+我的Bot
+创建Bot
+关联已有OpenClaw
+选择你喜欢的方式，关联OpenClaw
+查看教程
+方式1：运行命令
+在OpenClaw的设备上运行以下命令，并等待执行成功
+bash<(curl-fsSL https://static.yuanbao.t...
+复制
+方式2：手动配置
+在OpenClaw服务器中配置元宝插件的密钥
+AppID
+SmNUYA1dnp9cv9ScHRARWxR.复制
+AppSecret
+复制
+方式3：扫码关联
+仅支持腾讯轻量云Lighthouse部署的OpenClaw
+扫描腾讯云Lighthouse二维码
+我已操作
+三、在WorkBuddy中完成绑定
+1）打开Claw设置
+1．打开WorkBuddy，点击左下角的头像
+2.在弹出菜单中点击「Claw设置」
+更多精彩内容访问：dmy.base44.app

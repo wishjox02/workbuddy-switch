@@ -1,0 +1,92 @@
+微信公众号：打磨院
+我是一个产品经理，帮我找一些适合我的skill
+WorkBuddy
+D
+已安装可直接使用的Ski
+Q搜索任务
+这些已经在你的环境中了，随时可以用：
+新建任务
+SkilI
+适用场景
+使用方式
+produet-manager-toolkit RICE优先级排序、用户访该分析、PRD 模板、产品发现框架、GTM策略直接让我*帮我做RICE 评估*即可
+pptx
+制作产品演示PPT、评审材料
+说“帮我做个PPT即可
+专家
+写产品博客、竞品分析报告、调研报告
+说“帮我写一份报告“即可
+技能
+web-search
+搜索行业信息、竞品动态、市场数据
+说“帮我搜一下xxx“即可
+输出Word格式的 PRD、方案文档
+说"帮我生成Word文档"即可
+pdf
+阅读和处理PDF格式的调研报告、合网
+说“帮我读这个PDF"即可
+自动化
+design-poster
+快速制作产品宣传海报、社交媒体素材
+说“帮我设计一张海报“即可
+快速总结长文章、会议录音、视颁内容
+说“帮我总结这个链接/文件“即可
+任务
+我是哪里人
+0-59
+推荐安装的社区Skill
+已光
+这些是社区中特别适合产品经理的skil，可以按需安装
+记住，我是湖北人，不爱吃棘
+75)P排
+PRD需求文档
+巴究/
+Skill
+安装量
+安装命令
+1小时用
+doc-prd (PRD 文指生成)
+80
+npxskitls_addvLadm3105/aidoc-flow=franeworkgdoc=prd -g
+已光/
+(: GHd) ap(nB-BugAA-pud
+npx skills add okwinds/miscellany@prd-writing=guide
+帮找披https://www.bilbil
+用户研究
+BYEA
+Skill
+安装
+√帮我握索最近30天关于“AI浏1小时前
+安装命令
+量
+已完/
+user-research
+(Anthropic 官方)
+206
+npxskills add anthropics/knowledge-work=plugins@user=researchgy
+展开更多（40)
+工作空间
+20260318114314
+√我是一个产品经理，帮我找一.
+3分钟前
+incac
+Craft
+GLM-5.0
+Skills
+六、使用建议
+首先阐述任务，无需提前猜测名称，仅描述需求即可。
+此任务适合新手入门，能够显著降低试错成本。
+找到相关内容后再进行安装比较，建议综合考虑用途与安全性后，再决定是否启用。
+10）Frontend Design
+一、基本信息
+安装名：frontend-design
+仓库来源：GitHub
+二、功能简介
+许多自动生成的页面尽管结构完善，但视觉层次、色彩搭配和整体质感通常欠佳。Frontend
+Design的核心价值在于，使WorkBuddy在生成前端页面时，兼顾设计感、风格协调性和演
+示效果，而非仅仅输出可运行的代码。
+三、适用场景
+生成落地页或活动页
+翻新老旧后台页面
+率先迅速探寻视觉方向
+更多精彩内容访问：dmy.base44.app

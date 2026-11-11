@@ -1,0 +1,25 @@
+微信公众号：打磨院
+3 个待办任务
+复制 skill 到用户级 skills 目录
+设置 TENCENT_DOCS_TOKEN 环境变量
+通过 setup.sh 配置 mcporter
+安装完成后，可在已安装技能列表中看到腾讯文档Skill。
+搜索技能
+X tencent-docs
+腾讯文档（docs.qq.com）-在线云文档...
+X tencent-meeting-mcp
+在用户提及腾讯会议、视频会议、线上会..
+X weather
+获取当前天气和天气预报（无需API密钥.
+X expense-reimbursement
+Provide executable reimbursement rule..
+X meeting-minutes
+Summarize a meeting transcript into a.
+X algorithmic-art
+Creating algorithmic art using p5.js wit..
+输入消息.
+导入技能
+Craft
+GLM-5.0-Turbo
+X Skills
+更多精彩内容访问：dmy.base44.app

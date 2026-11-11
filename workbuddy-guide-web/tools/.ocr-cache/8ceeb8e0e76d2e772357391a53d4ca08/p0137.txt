@@ -1,0 +1,34 @@
+微信公众号：打磨院
+若已是最新版本则无需操作；若存在新版本，系统将自动下载并完成升级。
+WorkBuddy
+当前没有可用的更新。
+确定
+Mac系统安装指南
+一、下载
+访问WorkBuddy 官网，点击下载WorkBuddy；
+dy.cn/work
+CODD'>.
+CodeBuddy
+WorkBuddy
+定价
+文档
+博客
+API文档
+活助
+Work Smart，Not Hard
+腾讯版AI办公助手
+WorkBuddy是AI原生的桌面智能体工作台，可在手机主流IM下指令，Al自动干活交付
+免部署·安装即用|预集成·横型一站搞定，兼容龙虾Skils|高安全·腾讯网关护航
+Claw快捷接入指南
+SS:10
+Mac ARM64
+Mocx64当前设备
+Windows x64 (服B ARM64)
+WORK
+适用于全角色，下达指令即可自动生成文档、表格、图表及PPT等可视化成果
+BUDD>.
+自主规划并交付多模态复杂任务结果
+支持多Agents并行工作，极致提效
+M系列芯片→选择MacARM64版本；
+Intel芯片→选择MacX64版本。
+更多精彩内容访问：dmy.base44.app

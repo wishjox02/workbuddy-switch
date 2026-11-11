@@ -1,0 +1,31 @@
+微信公众号：打磨院
+MCP
+米Claude
+<$>
+architecture
+MCPclients
+client.py
+MCP hosts
+MCP
+MCP
+server
+MCP
+server
+Remote
+MCP
+Local data
+services
+31
+server
+sources
+WorkBuddy
+连接器管理
+自定义通接器
+新建任务
+QQ邮箱
+腾讯乐享
+连接器
+二、MCP市场
+WorkBuddy提供现成的MCP资源入口，可访问腾讯云MCP市场
+https://cloud.tencent.com/developer/mcp获取更多开放生态能力。
+更多精彩内容访问：dmy.base44.app

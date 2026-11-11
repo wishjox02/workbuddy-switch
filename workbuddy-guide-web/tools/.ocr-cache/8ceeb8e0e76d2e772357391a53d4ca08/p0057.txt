@@ -1,0 +1,28 @@
+微信公众号：打磨院
+搜索技能
+Xtencent-meeting-mcp
+在用户提及腾讯会议、视频会议、线上会..
+X weather
+获取当前天气和天气预报（无需API密钥
+Xexpense-reimbursement
+Provideexecutablereimbursementrule...
+X meeting-minutes
+Summarize ameeting transcript into a..
+Xalgorithmic-art
+Creating algorithmic art using p5.js wit..
+?
+X brand-guidelines
+AppliesAnthropic'sofficial brand color..
+输入消息..
+导入技能
+Craft
+GLM-5.0-Turbo
+X Skills
+3）安装完成后的效果
+安装成功后，便可在WorkBuddy中借助自然语言管理腾讯会议相关流程，无需手动记忆繁杂
+参数。
+例如，你能够直接用一句话创建会议、修改会议、查询会议安排，或者在会后继续查看录制内
+容、转写记录和智能纪要。
+a）测试示例1
+创建会议示例，如下图所示：
+更多精彩内容访问：dmy.base44.app

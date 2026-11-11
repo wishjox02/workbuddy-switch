@@ -1,0 +1,15 @@
+微信公众号：打磨院
+安装-WorkBuddy(User)
+选择目标位置
+您想将WorkBuddy安装在什么地方？
+安装程序将安装WorkBuddy到下列文件夹中。
+单击"下一步"继续。如果您想选择其它文件夹，单击"浏览”。
+C:\Users\i\AppData\LocalPrograms\WorkBuddy
+浏览(R)..
+至少需要有577.8MB的可用磁盘空间。
+上一步(B)
+下一步(N)
+取消
+确认开始菜单文件夹，点击下一步；
+杰
+更多精彩内容访问：dmy.base44.app

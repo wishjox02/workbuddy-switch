@@ -1,0 +1,14 @@
+微信公众号：打磨院
+WorkBuddy接入微信ClawBot指南
+本指南将帮助您通过WorkBuddy的「微信ClawBot集成」能力，将WorkBuddy接入微信。
+绑定后，您可以直接在微信中向电脑上的WorkBuddy发送任务，并接收执行结果。
+一、前提条件
+在开始之前，请确保您已满足以下条件：
+已在电脑上安装并登录WorkBuddy>=4.6.4
+手机上已登录一个可正常使用的微信>=8.0.70
+微信ClawBot接入无需填写AppID、AppSecret等开发凭证，只需扫码即可完成绑定。
+二、打开微信ClawBot集成
+1）进入Claw设置
+1．打开WorkBuddy
+2.在左侧Claw栏点击齿轮图标，进入「Claw设置」
+更多精彩内容访问：dmy.base44.app

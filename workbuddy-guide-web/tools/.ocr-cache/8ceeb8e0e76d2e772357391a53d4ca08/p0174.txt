@@ -1,0 +1,14 @@
+微信公众号：打磨院
+13:52
+52
+WeChat
+我的Bo
+创建Bot
+关联OpenClaw
+元宝派支持养虾啦！
+把你的OpenClaw拉进来，让TA陪派友聊天
+随时在线、有求必应
+关联已有OpenClaw
+3）关联操作
+本指南以手动配置为主，将ApplD和AppSecret填入WorkBuddy完成绑定。
+更多精彩内容访问：dmy.base44.app

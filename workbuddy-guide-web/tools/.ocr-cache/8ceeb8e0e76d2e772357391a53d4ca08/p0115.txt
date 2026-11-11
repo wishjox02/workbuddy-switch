@@ -1,0 +1,13 @@
+微信公众号：打磨院
+"args": ["wecom-bot-mcp-server"],
+"env": {
+"WECOM_WEBHOOK_URL": "your-webhook-url"
+示例地址：https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxxxxxx-
+XXXXXXXXXXXX-XXXX-XXXX-XXXX
+4）确认配置状态
+保存后在界面中查看MCPServer状态：
+状态
+含义
+绿色连接成功，可正常使用
+红色配置异常，需检查配置内容、命令环境或地址
+更多精彩内容访问：dmy.base44.app

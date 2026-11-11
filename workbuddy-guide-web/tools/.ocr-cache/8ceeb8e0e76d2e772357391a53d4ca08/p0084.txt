@@ -1,0 +1,98 @@
+微信公众号：打磨院
+四、推荐使用方式
+直接描述目标页面、需执行的操作以及最终输出结果即可。
+示例指令：
+请打开此网页，完整阅读需展开和滚动页面后才能看到的内容，整理成结构化
+摘要，并为关键页面截图存档。
+五、效果示意
+可以看到，WorkBuddy会模拟真实浏览行为，按步骤读取页面内容。
+使用AgentBrowser打开这个网页链接https://mp.weixin.qq.com/sj
+全都文件
+<>变更
+预览
+WorkBuddy
+D
+产物
+文章分析_独家对话谢赛宁.mdDo
+Q搜索任务
+使用AgentBrowser打开这个网页链接
+文章分析_挂家对话谢赛
+https:/mp.weixin.qq.com/s/PIOh_aXVuNUT27G5UoKCkw，帮我把标题、核心观点、
+新建任务
+结构和最值得关注的5个信息点整理出来。
+文件变更
+文章分析：《独家对话谢赛宁：遗出
+文章分析__推家对话.
+硅谷1》
+Claw
+来源：微信公众号「语言即世界
+WorkBuddy
+language is world,;
+专家
+作者：张小珺
+我来帮你分析这篇微信公众号文章。首先加载Agent Browser技能来访问网页。
+发布时间：2026年3月16日
+技能
+原文链接：
+执行成功·
+https:/mp.welxin.qq.com/s/PIOh_aX
+VuNUT27G5UoKCkw
+好的，现在让我打开这篇微信文章并提取内容。
+自动化
+打开微信公众号文章链接
+一、标题
+任务
+cd /Users/bellon/WorkBuddy/20260318114336 && agent-brows
+《独家对话谢赛宁：遗出硅谷！》
+使用Agent Browser打开这个..
+2分钟用
+等待页面加载完成
+副标题/播客完整标题：133.对谢赛宁
+的7小时马拉松访读：世界模型、遇出
+硅谷、AMI Labs、杨立昆、李飞飞和
+帮我检查当前.workbuddy目...
+4小时前
+获取文章标题
+42
+agent-browser get title
+一共有多少种风格？
+18小时前
+获取文章全文内容
+二、核心观点
+已光/
+agent-browser get text body 2>/dev/null | head 500]
+本文是一篇深度人物访谈，核心观点可
+获取到了元数据，但正文内容被截断了让我直接获取文意正文部分的内容。
+以概括为：
+√帮我做一个责吃始web
+1天前
+已成
+通过CSS选择器获取文章正文区域的快照
+谢赛宁及其联合创始人杨立昆（Yann
+00E- peau I lnujhap/<Z upuoss# stoqsdeus josmouq-uafe
+LeCun）认为，当前硅谷主流的LLM
+[image] 帮我用poster design skill 1天前
+（大语言模型）路线存在根本性局限，
+已完/虎
+内容很长，让我继续获取后续部分。
+真正通向人类级智能的道路是「世界模
+型（World Model)——种基于视
+展开更多(33)
+向下滚动获取更多文章内容
+觉与多模态感知、能理解和模拟物理世
+n 5000
+界运行规律的新范式。为此。他们创
+工作空间
+立了AMI Labs，主动远离硅谷，走一
+20260318114314
+条“反向的OpenAI"之路。
+安装这个skill到.workbuddy下h...1小时前
+关键论点包括：
+1.LLM被高估了：“硅谷已经深陷于
+Craft
+GLM-5.0
+Skils
+LLM，完全被它催眠了°:LLM的
+Scaling Law“有水分”；语言是"鸦
+最终可输出结构化总结或整理后的文档结果。
+更多精彩内容访问：dmy.base44.app

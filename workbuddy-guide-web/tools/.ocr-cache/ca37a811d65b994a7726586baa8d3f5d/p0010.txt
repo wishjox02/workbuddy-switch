@@ -1,0 +1,10 @@
+Aworkbuddy
+WorkBuddy
+登录
+点击登录按钮
+WorkBuddy编辑(E)窗口(W)帮助(H)
+WorkBuddy，我帮你
+登录
+隐私政策
+服务条款
+自动跳转网页登录

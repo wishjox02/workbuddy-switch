@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy 全景数据站 · 五套资料，一次读完</title>
+<meta name="description" content="把五套 WorkBuddy 资料包里的场景、指令、案例、路线与排错经验汇总成一张可检索的数据地图：100 个场景、500 条组合、63 个应用案例、20 个职场模板。">
+<meta name="color-scheme" content="dark light">
+<link rel="stylesheet" href="assets/theme.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%235eead4'/><text x='32' y='44' font-size='34' font-family='sans-serif' font-weight='bold' text-anchor='middle' fill='%23080b12'>W</text></svg>">
+</head>
+<body>
+
+<div class="progress" id="progress"></div>
+<noscript>
+  <div class="js-alert" style="display:block">
+    <b>浏览器禁用了 JavaScript</b>
+    <span>本站的场景矩阵、指令工坊、案例筛选都依赖脚本渲染。请在浏览器设置里允许本页运行脚本后刷新。</span>
+  </div>
+</noscript>
+
+<!-- ============ 侧栏 ============ -->
+<aside class="rail">
+  <div class="rail__brand">
+    <div class="rail__mark">W</div>
+    <div>
+      <div class="rail__name">全景数据站</div>
+      <div class="rail__sub">WorkBuddy Atlas</div>
+    </div>
+  </div>
+
+  <nav class="rail__nav" id="railnav">
+    <a href="#product"><i>01</i>产品认知</a>
+    <a href="#layers"><i>02</i>能力六层</a>
+    <a href="#scenes"><i>03</i>场景矩阵</a>
+    <a href="#prompts"><i>04</i>指令工坊</a>
+    <a href="#cases"><i>05</i>案例库</a>
+    <a href="#topics"><i>06</i>专题与模板</a>
+    <a href="#roadmap"><i>07</i>岗位与行业</a>
+    <a href="#auto"><i>08</i>自动化可靠性</a>
+    <a href="#knowledge"><i>09</i>知识库</a>
+    <a href="#learn"><i>10</i>上手路线与排错</a>
+    <a href="#library"><i>11</i>原文库</a>
+  </nav>
+
+  <button class="rail-toggle" id="themeBtn" type="button">
+    <span id="themeLabel">切换浅色</span><span>◐</span>
+  </button>
+
+  <div class="rail__foot">
+    汇总自 5 套公开资料包<br>表述为重新撰写，仅保留可核实事实
+  </div>
+</aside>
+
+<!-- ============ 主体 ============ -->
+<main class="wrap">
+
+  <!-- 脚本被拦截或加载失败时显示，正常情况下隐藏 -->
+  <div class="js-alert" id="jsBanner" hidden>
+    <b>页面交互没有生效</b>
+    <span id="jsBannerTxt">这通常说明浏览器没有执行页面脚本：可能是在预览窗口里被沙箱拦截，或用了只读模式打开。</span>
+    <span>解决办法：把整个 <code>workbuddy-site</code> 文件夹放到本地，双击 <code>index.html</code> 用 Chrome / Edge 打开；若在聊天软件的预览窗里，请选「在浏览器中打开」。</span>
+  </div>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="hero__eyebrow">Atlas · 数据汇总站</div>
+    <h1>把散在五套资料里的经验，<br><em>压成一张能查的地图</em></h1>
+    <p class="hero__lead" id="heroLead"></p>
+    <div class="hero__actions">
+      <a class="btn btn--solid" href="#scenes">进场景矩阵 →</a>
+      <a class="btn" href="#prompts">直接抄指令</a>
+      <a class="btn" href="#learn">七天怎么练</a>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <!-- 01 产品认知 -->
+  <section class="section" id="product">
+    <div class="sec-head">
+      <span class="sec-head__idx">01 / PRODUCT</span>
+      <h2>先弄清它到底在替你做什么</h2>
+      <p>大多数工具在回答你的问题，这一类工具在替你交差。判断标准也随之改变：不看它聊得顺不顺，而看同一件事第二次是否还需要你从头解释。</p>
+    </div>
+    <div class="grid grid--4" id="positions"></div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">三种模式</span><span style="font-size:12.5px;color:var(--dim)">难度越高，越要往前一步先问再想</span></div>
+      <div class="grid grid--3" id="modes"></div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">七个模块</span><span style="font-size:12.5px;color:var(--dim)">界面会改版，但这七块的功能位置不会消失</span></div>
+      <div class="grid grid--4" id="modules"></div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">汇总范围</span><span style="font-size:12.5px;color:var(--dim)">五套资料各自贡献了什么</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>资料</th><th>规模</th><th>本站取用的部分</th></tr></thead>
+          <tbody id="pkgRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">关键数字</span><span style="font-size:12.5px;color:var(--dim)">来自资料包记录，随版本可能变化</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>项目</th><th>口径</th><th>说明</th></tr></thead>
+          <tbody id="factRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 02 能力六层 -->
+  <section class="section" id="layers">
+    <div class="sec-head">
+      <span class="sec-head__idx">02 / STACK</span>
+      <h2>六层能力：从一句话，到别人也能复用</h2>
+      <p>新人常犯的错是直接跳到第五层：任务还没跑顺就挂上定时。这六层是逐级固化的过程，越往下越贵，也越值钱。</p>
+    </div>
+    <div class="grid" id="layerList" style="gap:9px"></div>
+  </section>
+
+  <!-- 03 场景矩阵 -->
+  <section class="section" id="scenes">
+    <div class="sec-head">
+      <span class="sec-head__idx">03 / SCENES</span>
+      <h2>一百个场景，十个抽屉</h2>
+      <p>十个分类各十个场景，每个场景按五类人群展开就是五百种组合。先按分类缩小范围，再按受众判断语气和验收标准。</p>
+    </div>
+    <div class="searchbar">
+      <span style="color:var(--dim)">⌕</span>
+      <input type="search" id="sceneSearch" placeholder="搜场景，例如：周报 / 去重 / 知识库 / 报价">
+      <span id="sceneCount"></span>
+    </div>
+    <div class="filters" id="catPills"></div>
+    <div class="filters" id="audPills"></div>
+    <div class="resultbar">
+      <span id="sceneSummary"></span>
+      <span>整张卡片都能点，直接生成指令</span>
+    </div>
+    <div class="scenes" id="sceneGrid"></div>
+  </section>
+
+  <!-- 04 指令工坊 -->
+  <section class="section" id="prompts">
+    <div class="sec-head">
+      <span class="sec-head__idx">04 / FORGE</span>
+      <h2>指令工坊：选场景，挑口径，直接复制</h2>
+      <p>同一个场景，速办与严谨两种说法会得到完全不同的结果。五种口径对应五种风险等级，选错了比不说更麻烦。</p>
+    </div>
+    <div class="forge">
+      <div class="forge__head">
+        <div class="forge__title">指令生成器<small>100 场景 × 5 口径 = 500 条</small></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select class="select" id="forgeCat"></select>
+          <select class="select" id="forgeScene"></select>
+        </div>
+      </div>
+      <div class="forge__body">
+        <div class="forge__row" id="forgeVersions"></div>
+        <div class="output">
+          <pre id="forgeOut"></pre>
+          <div class="output__bar">
+            <span id="forgeMeta"></span>
+            <div style="display:flex;gap:8px">
+              <button class="copy" data-copy="forge" type="button">复制指令</button>
+              <button class="copy" data-next="1" type="button">换下一条 →</button>
+            </div>
+          </div>
+        </div>
+        <div class="grid grid--3" style="gap:9px">
+          <div class="card" style="padding:14px"><span class="tagline">写法要点</span>
+            <p style="margin-top:6px">目标写结果，不写步骤；材料写清楚在哪；边界写不许做什么；验收写怎样算合格。</p></div>
+          <div class="card" style="padding:14px"><span class="tagline">最容易漏</span>
+            <p style="margin-top:6px">验收标准。没有验收，它只能按自己的理解交差，你也说不清哪里不对。</p></div>
+          <div class="card" style="padding:14px"><span class="tagline">什么时候别用</span>
+            <p style="margin-top:6px">会碰客户数据、会外发、会删文件的任务，先切到严谨版，用复制件跑一遍。</p></div>
+        </div>
+        <div>
+          <div class="filters"><span class="filters__label">动作地图</span><span style="font-size:12.5px;color:var(--dim)">十一组常用动作，先按组选，再套上面的口径</span></div>
+          <div class="grid grid--4" id="promptMap" style="gap:9px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 案例库 -->
+  <section class="section" id="cases">
+    <div class="sec-head">
+      <span class="sec-head__idx">05 / CASES</span>
+      <h2>案例库：六十三个具体做法，十二个进阶样板</h2>
+      <p>前者告诉你这类活怎么起手，后者告诉你复杂任务怎么组织结构。看案例时重点看它的边界和人工关口，而不是产出物多漂亮。</p>
+    </div>
+    <div class="filters" id="casePills"></div>
+    <div class="resultbar"><span id="caseCount"></span><span>点卡片可复制这条做法的起手指令</span></div>
+    <div class="cases" id="caseGrid"></div>
+
+    <div style="margin-top:34px">
+      <div class="filters"><span class="filters__label">深案例</span><span style="font-size:12.5px;color:var(--dim)">按上手难度分级，L4 才需要多角色协作</span></div>
+      <div class="deep" id="deepGrid"></div>
+    </div>
+  </section>
+
+  <!-- 06 专题与模板 -->
+  <section class="section" id="topics">
+    <div class="sec-head">
+      <span class="sec-head__idx">06 / PLAYS</span>
+      <h2>二十个进阶专题，二十个职场骨架</h2>
+      <p>专题回答什么时候用、最容易在哪翻车；模板给的是结构，不是文案——把【】里的内容换成你自己的，才是能用的一版。</p>
+    </div>
+    <div class="cols">
+      <div class="list">
+        <div class="list__head">进阶专题 <span>何时用 / 常见坑</span></div>
+        <ul id="topicList"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">职场模板 <span>结构骨架</span></div>
+        <ul id="tplList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 07 岗位与行业 -->
+  <section class="section" id="roadmap">
+    <div class="sec-head">
+      <span class="sec-head__idx">07 / ROUTES</span>
+      <h2>岗位路线：先选一件每周都会发生的事</h2>
+      <p>不要从"这个岗位有哪些提示词"开始，而要从"哪些活重复、哪些产物有标准、哪些决定必须人负责"开始。</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>岗位</th><th>第一周只练一件事</th><th>第二周再叠加</th><th>人工关口</th></tr></thead>
+        <tbody id="roleRows"></tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">成熟度</span><span style="font-size:12.5px;color:var(--dim)">不是所有任务都需要走到第四级</span></div>
+      <div class="grid grid--4" id="maturity"></div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">行业落地</span><span style="font-size:12.5px;color:var(--dim)">行业化的关键在约束与责任边界，不在名称</span></div>
+      <div class="grid grid--2" id="industryGrid"></div>
+    </div>
+  </section>
+
+  <!-- 08 自动化 -->
+  <section class="section" id="auto">
+    <div class="sec-head">
+      <span class="sec-head__idx">08 / AUTOMATION</span>
+      <h2>自动化不是让它自己跑，而是让它跑坏了你能发现</h2>
+      <p>能用手动跑通，只说明它能用；能稳定定时、失败可查、异常有人管，才叫可靠。下面这套结构来自一个真实的内容巡检任务。</p>
+    </div>
+    <div class="cols">
+      <div class="list">
+        <div class="list__head">六个准入问题 <span>答"是"越多越该自动化</span></div>
+        <ul id="autoIntake"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">质量门禁与交付纪律 <span>四条底线</span></div>
+        <ul id="autoGates"></ul>
+      </div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">状态机</span><span style="font-size:12.5px;color:var(--dim)">每个状态都要有失败出口</span></div>
+      <div class="flow" id="autoFlow"></div>
+    </div>
+
+    <div class="cols" style="margin-top:26px">
+      <div class="list">
+        <div class="list__head">重试策略 <span>只对临时故障重试</span></div>
+        <ul id="autoRetry"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">上线后盯这六个指标 <span>持续下降说明配置变了</span></div>
+        <ul id="autoMetrics"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 09 知识库 -->
+  <section class="section" id="knowledge">
+    <div class="sec-head">
+      <span class="sec-head__idx">09 / KNOWLEDGE</span>
+      <h2>知识库：不是存得多，而是取得出来</h2>
+      <p>库的价值取决于资料质量，不取决于容量。来源不明、版本冲突、过期未清，问出来的答案就会一次一个样。</p>
+    </div>
+    <div class="grid grid--4" id="imaLibs"></div>
+
+    <div class="cols" style="margin-top:26px">
+      <div class="list">
+        <div class="list__head">入库五项评分 <span>四项达标再进库</span></div>
+        <ul id="imaScore"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">回存规则 <span>存什么 / 不存什么</span></div>
+        <ul id="imaKeep"></ul>
+      </div>
+    </div>
+
+    <div style="margin-top:26px">
+      <div class="filters"><span class="filters__label">二十个体检问题</span><span style="font-size:12.5px;color:var(--dim)">每月抽十个问一遍，能查出大部分污染</span></div>
+      <div class="grid grid--2" id="imaProbes" style="gap:8px"></div>
+    </div>
+  </section>
+
+  <!-- 10 学习路线与排错 -->
+  <section class="section" id="learn">
+    <div class="sec-head">
+      <span class="sec-head__idx">10 / PRACTICE</span>
+      <h2>七天摸到手感，三十天养成习惯</h2>
+      <p>顺序很重要：先跑通一个闭环，再谈自动化。多数人卡在装了很多功能、却没让任何一件事第二次变快。</p>
+    </div>
+    <div class="cols">
+      <div class="list">
+        <div class="list__head">七天路线 <span>每天只做一件</span></div>
+        <ul id="weekRoute"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">三十天路线 <span>从跑通到能被别人复用</span></div>
+        <ul id="monthRoute"></ul>
+      </div>
+    </div>
+
+    <div class="cols" style="margin-top:26px">
+      <div class="list">
+        <div class="list__head">视频学习三条线 <span>以官方界面为准</span></div>
+        <ul id="videoRoute"></ul>
+      </div>
+      <div class="list">
+        <div class="list__head">挑视频的五个标准 <span>不吹全自动</span></div>
+        <ul id="pickList"></ul>
+      </div>
+    </div>
+
+    <div style="margin-top:34px">
+      <div class="filters"><span class="filters__label">排错</span><span style="font-size:12.5px;color:var(--dim)">先缩小范围，再一次只改一个变量</span></div>
+      <div class="faq" id="faqList"></div>
+    </div>
+  </section>
+
+  <!-- 11 原文库 -->
+  <section class="section" id="library">
+    <div class="sec-head">
+      <span class="sec-head__idx">11 / SOURCE</span>
+      <h2>原文库：五套资料，逐字可查</h2>
+      <p>前面十个区块是重写过的结论，这里放资料本身。全部原文已经解析成结构化数据——按资料包筛、搜一句话、点进去逐段读，命中位置会高亮。原文件只作溯源，阅读不再依赖 Word 和 PDF。</p>
+    </div>
+    <div class="searchbar">
+      <span style="color:var(--dim)">⌕</span>
+      <input type="search" id="docSearch" placeholder="全文搜索，例如：定时任务 / Token / 会议纪要 / 连接器">
+      <span id="docCount"></span>
+    </div>
+    <div class="filters" id="pkgPills"></div>
+    <div class="filters" id="typePills"></div>
+    <div class="resultbar">
+      <span id="docSummary"></span>
+      <span>左侧点一篇，右侧直接读全文</span>
+    </div>
+    <div class="lib">
+      <div class="lib__side">
+        <div class="doclist" id="docList"></div>
+      </div>
+      <div class="lib__main">
+        <div class="reader" id="docReader"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 页脚 -->
+  <footer class="foot">
+    <div class="foot__note">
+      <strong style="color:var(--txt)">关于这个站点</strong><br>
+      01–10 区块是对五套公开资料的二次整理：只保留可核实的产品事实与可复用的方法结构，表述全部重写。<br>
+      11 原文库是资料本身的原文，已解析成数据逐字可读可搜，用于核对前面每一条结论的出处。<br>
+      产品界面、套餐与入口会随版本变化，实际操作请以官方当前版本为准。
+    </div>
+    <div>
+      <div class="filters__label" style="margin-bottom:8px">官方来源</div>
+      <div class="sources" id="sourceList"></div>
+      <div style="margin-top:14px;font-size:11.5px;color:var(--dim)" id="boundaryList"></div>
+    </div>
+  </footer>
+</main>
+
+<button class="top" id="toTop" type="button" aria-label="回到顶部">↑</button>
+<div class="toast" id="toast">已复制</div>
+
+<script src="assets/data-core.js"></script>
+<script src="assets/data-scenes.js"></script>
+<!-- 原文库数据：由 tools/build_docs.py 从 PDF / DOCX / MD / CSV / TXT 抽取生成 -->
+<script src="content/docs-index.js"></script>
+<script src="content/docs-g1.js"></script>
+<script src="content/docs-g2.js"></script>
+<script src="content/docs-g3.js"></script>
+<script src="content/docs-g4.js"></script>
+<script src="content/docs-g5.js"></script>
+<script src="assets/app.js"></script>
+<script>
+/* 自检：脚本没跑起来时给出可见提示，避免用户在死页面上反复点击 */
+(function () {
+  function alertBox(msg) {
+    var b = document.getElementById('jsBanner');
+    if (!b) return;
+    if (msg) { var t = document.getElementById('jsBannerTxt'); if (t) t.textContent = msg; }
+    b.hidden = false;
+  }
+  window.addEventListener('error', function (e) {
+    var src = (e && e.target && e.target.src) || '';
+    if (src) alertBox('脚本加载失败：' + src.split('/').pop() + '。请确认 assets 文件夹与 index.html 在同一目录。');
+    else if (e && e.message) alertBox('页面脚本出错：' + e.message);
+  }, true);
+  setTimeout(function () {
+    var g = document.getElementById('sceneGrid');
+    if (!g || g.children.length === 0) {
+      alertBox('场景列表没有渲染出来，说明脚本没有执行。请把整个 workbuddy-site 文件夹放到本地，用 Chrome / Edge 双击打开 index.html。');
+    }
+  }, 2000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+WorkBuddy安装
+选择安装位置
+选择WorkBuddy的安装文件夹。
+安装程序将把orkBudy，安装到以下目录。要安装到另一个目录，请点击[浏览
+(）]并选择其他的文件夹。点击下一汀继续。
+安装目录
+SerslAdmini stratorlAppDataLocal ProgramsWorkBuddy
+浏览(B)...
+所需空间：1.1GB
+可用空间：38.6GB
+WorkBuddy 5. 2. 3
+<上一步(P)下一步(N）>
+取消（c）
+WorkBuddy安装
+口
+正在安装
+WorkBuddy正在安装，请稍候。
+WorkBuddy 5. 2. 3
+<上一步（P）下一步（H）>
+取消（c）

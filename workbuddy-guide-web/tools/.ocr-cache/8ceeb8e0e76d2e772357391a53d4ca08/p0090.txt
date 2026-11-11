@@ -1,0 +1,67 @@
+微信公众号：打磨院
+先进行一轮搜索，再让AI进行归纳整理
+四、推荐使用方式
+直接阐明检索主题、时间范围以及你最终所需的输出格式。
+示例指令：
+请帮我检索近1个月AI办公工具领域的重要动态，整理成要点摘要，并附上
+来源链接。
+五、效果示意
+下面是WorkBuddy实际执行搜索后的界面示意：
+帮我报索最近30天关于"AI浏览器代理“的文章，筛出最
+WorkBuddy
+D
+近30天*AI浏览器代理*最值得看的5重文章
+Q搜索任务
+1.  Al Browser Agents in 2026: Which One Actually Saves Time?
+新建任务
+为什么值得看：这是目前最实用的四大主流产品横评（OpenAlOperator/Google Marinpr/AnthropicCor
+/ Perplexity
+Comet)，用真实场景测试而非跑分，直接告诉你“患个真省时间、哪个还是花架子”。
+③Claw
+2.  AI Web Browsers Benchmark: Complete Selection Guide 2026
+技能
+AIMultiple·2026年3月13日（5天前更新）
+为什么值得看：唯一一顾对10+款AI浏览器做了标准化基准测试的深度评测，包含摘要准确率、跨标签页工作流、表单自动化等维度的实
+测数据，还重点揭示了Perplexity Comet的提示注入安全涯润
+选型必读。
+自动化
+3.@网站要给AI打工了？WebMCP让浏览器成为Agent的工具箱
+任务
+腾讯云开发者社区·2026年3月12日
+帮我度索最近30天关于"AI浏.
+7分用
+为什么值得看：深入解折了Gobgle和Microsoft联合推出的W3C新标准WebMCp—它让网站主动向AIAgent暴霜结构化API，Token
+已光
+消耗降低97.5%，这可能是A润览器代理从”猜着点按钮“到“直接调API=的范式拐点。
+使用local whisperski智我把...
+325分用
+4.  11 Best AlBrowser Agents in 2026
+使用PDF / Word / PPT / Exce.
+Firecrawl2026年2月19日
+39分0用
+已究成
+为什么值得看：覆盖面最广的一篇——从开发者框架（Browser Use、Stagohand）到云基础设施（Browserbase）再到消费级浏范器
+(Comet、Atlas），按使用场景给出了清晰的选型路线图。并指出“杀手级应用其实是造留系统集成“这个反直觉润察。
+使用AgentBrowser打开这个.53分特附
+已光质
+5. / The State of AI & Browser Automation in 2026
+帮我检查当前.workbuddy目....
+5小时前
+Browserless-2026年1月21日
+已完虎
+为什么值得看：站在行业全局视角写的年度趋势报告，系统机理了六大技术趋势（自我修复自动化、浏览器内直接运行AI、多智能体缩排
+展开更多(36)
+工作空间
+?
+20260
+2小时前
+uncao
+Craft
+GLM-5.0
+六、使用建议
+带时间范围提问：例如近1周、近1个月、今年以来。
+要求附带来源：以便后续复核与引用。
+适合先查后写：尤其适合资讯汇总、竞品调研和资料整理。
+6）Obsidian
+一、基本信息
+更多精彩内容访问：dmy.base44.app
